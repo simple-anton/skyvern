@@ -85,8 +85,26 @@ This is the authoritative catalogue. `block_type` values are exact.
 | `navigation` | One **goal** on a page the agent must work out (fill a form, click through a flow) | Data capture; click-by-click scripts | Over/under-shoots without criteria |
 | `extraction` | Structured data capture, validated against `data_schema` | Navigating to the data | Extracts from the wrong page |
 | `login` | **All** authentication. Handles stored credentials + 2FA/TOTP | Hand-rolling login via navigation | — (always prefer this) |
-| `file_download` | Steps whose purpose is downloading a file | Generic navigation | Completes before download lands |
-| `validation` | Asserting state; deciding continue vs. abort | Doing anything | Reads only the *current page* |
+| `file_download` | Steps whose purpose is downloading a file (detects download completion) | Generic navigation | Times out when the download control is ambiguous |
+| `validation` | Asserting state; deciding continue vs. abort | Doing anything | Reads only the *current page* (set `without_page_information: true` to validate against prior workflow data instead) |
+
+**Field availability matrix — these optional fields exist only where marked.
+Never emit a field on a block type that does not carry it; it will be silently
+ignored, which is worse than an error because the protection you think you added
+does not exist:**
+
+| Field | `navigation` | `action` | `extraction` | `login` | `file_download` | `validation` | `goto_url` |
+|---|---|---|---|---|---|---|---|
+| `complete_criterion` / `terminate_criterion` | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
+| `max_steps_per_run` | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `max_retries` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| `error_code_mapping` | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ |
+| `selector` + `ai_fallback` | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+Where a block lacks `complete_criterion`, put the COMPLETE/TERMINATE conditions
+in prose inside its `navigation_goal` — the completion judge reads the goal text.
+`goto_url` carries only `url` (plus the base fields): it needs no protection
+because it cannot wander.
 
 ### 2.2 Control-flow blocks (no browser cost)
 
@@ -97,13 +115,13 @@ This is the authoritative catalogue. `block_type` values are exact.
 | `while_loop` | Iteration count unknown until runtime (pagination, polling) | **Only** `{{ current_index }}` — no `current_value`. Hard cap 100 iterations. `criteria_type: "prompt"` NOT supported |
 | `wait` | Fixed pause (`wait_sec`) | Never cached; use sparingly, prefer a criterion |
 
-### 2.3 Deterministic / utility blocks (no LLM, no browser — always prefer these)
+### 2.3 Utility blocks (no browser — always prefer these over browser blocks)
 
-`code` (Python), `http_request`, `text_prompt` (pure LLM, no browser),
-`file_url_parser`, `pdf_parser`, `pdf_fill`, `split_pdf`, `file_upload`,
-`download_to_s3`, `upload_to_s3`, `send_email`, `email_inbox`, `print_page`,
-`google_sheets_read`, `google_sheets_write`, `http_request`,
-`human_interaction`, `workflow_trigger`.
+`code` (Python), `http_request`, `text_prompt` (a pure LLM call — the one
+utility block that is not deterministic), `file_url_parser`, `pdf_parser`,
+`pdf_fill`, `split_pdf`, `file_upload`, `download_to_s3`, `upload_to_s3`,
+`send_email`, `email_inbox`, `print_page`, `google_sheets_read`,
+`google_sheets_write`, `human_interaction`, `workflow_trigger`.
 
 ### 2.4 FORBIDDEN block types
 
@@ -330,6 +348,10 @@ which text is typed — that parameter **must** appear in `cache_key`.
   on failure. Use it wherever you can infer a durable selector (stable `id`,
   `name`, `data-testid`, `aria-label`, a `type="submit"`). Prefer semantic and
   test attributes; avoid generated class hashes and deep `nth-child` chains.
+  ⚠️ Two distinct fields share the name `ai_fallback`: the **block-level** field
+  on `action` is an enum string (`"fallback"` | `"proactive"`); the
+  **workflow-level** field is a boolean (fall back to the agent when cached code
+  fails). Never mix them up.
 - **Push volatility into never-cached blocks.** `conditional`, `wait`, and
   `code` always execute live. Branch decisions therefore belong in a
   `conditional` block, never inside a prompt as "if X do A else do B" — a
@@ -377,9 +399,12 @@ notes how many warm-up runs are needed to cover all paths.
 
 ### 6.3 Anti-loop / anti-backtrack
 
-- Every AI block: a page-observable `complete_criterion` **and** a
-  `terminate_criterion`.
-- Every AI block: an explicit `max_steps_per_run` sized to the real work
+- Every block that carries the fields (`navigation`, `login`, `validation` — see
+  the field matrix in §2.1): a page-observable `complete_criterion` **and** a
+  `terminate_criterion`. For blocks without those fields (`action`, `extraction`,
+  `file_download`), state the COMPLETE/TERMINATE conditions in the goal prose.
+- Every block that supports it (`navigation`, `extraction`, `login`,
+  `file_download`): an explicit `max_steps_per_run` sized to the real work
   (a single form ≈ 5–10; a multi-page flow ≈ 15–25).
 - Loops: `continue_on_failure: true` (and `next_loop_on_failure: true` inside
   `for_loop`) so one bad item cannot kill the run.
@@ -422,6 +447,14 @@ bug, not a navigation bug: retrying never fixes it.
 `{{ current_index }}`; `while_loop` exposes **only** `{{ current_index }}`.
 Choose `loop_over_parameter_key` for a workflow parameter, or
 `loop_variable_reference` for a previous block's output — never both.
+
+**Downloaded files:** the run's download directory is addressed by the special
+literal `SKYVERN_DOWNLOAD_DIRECTORY`. To attach files downloaded earlier in the
+run (in `send_email.file_attachments` or an upload block's `path`), use that
+literal — **not** a Jinja reference to the download block's output.
+`{{ some_download_block.output }}` renders the TaskOutput envelope (a dict), not
+a file path, and fails with "file not found". Attachment entries must resolve to
+a real path, a URL, or `SKYVERN_DOWNLOAD_DIRECTORY`.
 
 ---
 
@@ -523,7 +556,8 @@ explicitly in `open_questions` rather than emitting a silently broken workflow.
 - [ ] `cache_key` discriminates every path-changing parameter.
 - [ ] Existing labels were preserved (or the invalidation is called out).
 - [ ] Branches are `conditional` blocks, not prose conditionals.
-- [ ] `max_steps_per_run` set on every AI block.
+- [ ] `max_steps_per_run` set on every block that supports it (§2.1 field matrix).
+- [ ] No field emitted on a block type that does not carry it (§2.1 field matrix).
 - [ ] Loops set `continue_on_failure` and start with a reset block.
 - [ ] `while_loop` has both a data-driven exit and a counter bound.
 - [ ] No session-bound URL is frozen into a `goto_url`.
@@ -700,7 +734,7 @@ and email it to accounting."*
       {
         "block_type": "file_download",
         "label": "download_invoice",
-        "next_block_label": "confirm_download",
+        "next_block_label": "email_to_accounting",
         "navigation_goal": "Download the invoice PDF for {{ invoice_month }}.\n\nGuardrails: The invoices are listed in a table with one row per month. Use the download link in the row whose period matches {{ invoice_month }}; the link is marked with a PDF icon. Close any cookie or survey popup that appears before interacting with the table. Do not open the invoice preview — use the direct download control.\n\nCOMPLETE when the PDF file for {{ invoice_month }} has finished downloading.\nTERMINATE if no invoice row exists for {{ invoice_month }}, or the portal shows a billing-access-denied message.",
         "parameter_keys": ["invoice_month"],
         "max_steps_per_run": 10,
@@ -710,13 +744,6 @@ and email it to accounting."*
           "invoice_not_found": "No invoice exists for the requested period",
           "access_denied": "The account lacks permission to view billing documents"
         }
-      },
-      {
-        "block_type": "validation",
-        "label": "confirm_download",
-        "next_block_label": "email_to_accounting",
-        "complete_criterion": "The invoice download completed and a PDF file is available",
-        "terminate_criterion": "No file was downloaded, or the downloaded file is empty"
       },
       {
         "block_type": "send_email",
@@ -730,8 +757,7 @@ and email it to accounting."*
         "recipients": ["accounting@example.com"],
         "subject": "Supplier portal invoice — {{ invoice_month }}",
         "body": "Attached is the supplier portal invoice for {{ invoice_month }}.",
-        "file_attachments": ["{{ download_invoice.output }}"],
-        "parameter_keys": ["invoice_month"]
+        "file_attachments": ["SKYVERN_DOWNLOAD_DIRECTORY"]
       }
     ],
     "finally_block_label": null
@@ -750,13 +776,20 @@ and email it to accounting."*
 - The download goal carries all four anatomy parts, references the row
   **visually** ("marked with a PDF icon"), pre-handles popups, and its
   completion criterion is the observable file, not "the invoice was obtained".
-- Two `validation` tripwires: a wrong state after login or a silent download
-  failure would otherwise email an empty attachment.
+- One `validation` tripwire where it earns its place: after login, where a wrong
+  state silently corrupts everything downstream. There is deliberately **no**
+  validation block after the download — "a file was downloaded" is not
+  page-observable, so a validation there would violate §4.2; download completion
+  is already detected by the `file_download` block itself, and a failed download
+  fails the block.
 - `error_code_mapping` describes failures in natural language, so the caller's
   downstream system can branch on them.
-- `{{ download_invoice.output }}` uses the **task-block** output shape — correct
-  for `file_download`; `{{ download_invoice.path }}` would be the non-task shape
-  and would fail.
+- The attachment is `SKYVERN_DOWNLOAD_DIRECTORY` — the special literal for the
+  run's download directory (§7). A Jinja reference to the download block's
+  output would render a dict, not a path, and fail.
+- `send_email` carries **no** `parameter_keys` field — `{{ invoice_month }}` in
+  `subject`/`body` renders anyway, because subject, body, and recipients are
+  template-formatted by the block itself.
 - SMTP settings are bound as `aws_secret` parameters and referenced by key. Note
   that `send_email` **requires** all four `smtp_*_secret_parameter_key` fields
   plus `sender` — omitting them is a schema error, and inlining the values
