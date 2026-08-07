@@ -27,22 +27,18 @@ execute and validate it against the live system.
 
 ## Ground truth beats memory — use it in this order
 
-**Never finalize a block's field set from memory alone** — Skyvern's schema
-evolves. Before emitting JSON, check, in this priority order:
+You have Read/Grep/Bash on this exact repo. **Never finalize a block's field
+set from memory alone** — Skyvern's schema evolves. Before emitting JSON, check,
+in this priority order:
 
-1. **Live CLI introspection (best — reflects the running code exactly, works
-   in any repo where the `skyvern` package is installed):**
+1. **Live CLI introspection (best — reflects the running code exactly):**
    ```
    command -v skyvern && skyvern block schema --type <block_type> --json
    ```
-   Serves the Pydantic schema straight from the installed package, no
-   server/API key needed. If `skyvern` isn't on PATH, fall back to 2.
+   Serves the Pydantic schema straight from the codebase, no server/API key
+   needed. If `skyvern` isn't on PATH in this environment, fall back to 2.
 
-2. **Source of record — only if this checkout *is* the Skyvern monorepo**
-   (i.e. `skyvern/schemas/workflows.py` exists at the repo root you're in).
-   In a different project — even one that *uses* Skyvern's API/SDK — these
-   paths won't resolve; don't try to grep for them. Use 1, or fall back to 3
-   and say so in `## Assumptions`.
+2. **Source of record (always available):**
    - `skyvern/schemas/workflows.py` — `class BlockType(StrEnum)` for exact
      `block_type` spellings; each `class <X>BlockYAML(BlockYAML)` for that
      block's exact field set; `ParameterType` / `WorkflowParameterType`
@@ -72,9 +68,6 @@ evolves. Before emitting JSON, check, in this priority order:
 3. **This skill's tables below** — a fast starting point, verified against
    source in a past session. Treat as "probably still true," not gospel;
    re-verify with 1 or 2 before you rely on anything unusual or high-stakes.
-   In a repo where neither 1 nor 2 is available, this is what you have —
-   proceed, but flag in `## Assumptions` that field names weren't verified
-   against a live schema this session.
 
 ## Mental model (stable — this is architecture, not schema, and changes slowly)
 
@@ -357,128 +350,6 @@ parameter; TOTP fields set on the blocks that need them.
 6. `## Warm-up procedure` — which runs to make with `run_with: "agent"`,
    which branch each covers, when to flip to `"code"`.
 
-## Worked example (portable — no repo dependency)
-
-*Request: "Log into the supplier portal, download this month's invoice PDF,
-and email it to accounting."*
-
-```json
-{
-  "title": "Supplier portal monthly invoice retrieval",
-  "run_with": "agent",
-  "cache_key": "default",
-  "ai_fallback": true,
-  "enable_self_healing": true,
-  "workflow_definition": {
-    "version": 2,
-    "parameters": [
-      {
-        "parameter_type": "workflow",
-        "key": "portal_credentials",
-        "workflow_parameter_type": "credential_id",
-        "description": "Stored credential for the supplier portal"
-      },
-      {
-        "parameter_type": "workflow",
-        "key": "invoice_month",
-        "workflow_parameter_type": "string",
-        "description": "Target month in YYYY-MM format"
-      },
-      { "parameter_type": "aws_secret", "key": "smtp_host", "aws_key": "SMTP_HOST" },
-      { "parameter_type": "aws_secret", "key": "smtp_port", "aws_key": "SMTP_PORT" },
-      { "parameter_type": "aws_secret", "key": "smtp_username", "aws_key": "SMTP_USERNAME" },
-      { "parameter_type": "aws_secret", "key": "smtp_password", "aws_key": "SMTP_PASSWORD" }
-    ],
-    "blocks": [
-      {
-        "block_type": "login",
-        "label": "login_to_portal",
-        "next_block_label": "verify_authenticated",
-        "url": "https://portal.example.com/login",
-        "parameter_keys": ["portal_credentials"],
-        "complete_criterion": "The account dashboard is visible and the page shows a signed-in user menu",
-        "terminate_criterion": "The page shows an invalid-credentials error, or the account is locked",
-        "max_steps_per_run": 8,
-        "max_retries": 1
-      },
-      {
-        "block_type": "validation",
-        "label": "verify_authenticated",
-        "next_block_label": "open_invoices",
-        "complete_criterion": "The page shows the authenticated dashboard with a navigation menu",
-        "terminate_criterion": "The page shows a login form or a session-expired message",
-        "error_code_mapping": {
-          "auth_failed": "The session is not authenticated, or the login did not persist"
-        }
-      },
-      {
-        "block_type": "goto_url",
-        "label": "open_invoices",
-        "next_block_label": "download_invoice",
-        "url": "https://portal.example.com/billing/invoices"
-      },
-      {
-        "block_type": "file_download",
-        "label": "download_invoice",
-        "next_block_label": "email_to_accounting",
-        "navigation_goal": "Download the invoice PDF for {{ invoice_month }}.\n\nGuardrails: The invoices are listed in a table with one row per month. Use the download link in the row whose period matches {{ invoice_month }}; the link is marked with a PDF icon. Close any cookie or survey popup that appears before interacting with the table. Do not open the invoice preview — use the direct download control.\n\nCOMPLETE when the PDF file for {{ invoice_month }} has finished downloading.\nTERMINATE if no invoice row exists for {{ invoice_month }}, or the portal shows a billing-access-denied message.",
-        "parameter_keys": ["invoice_month"],
-        "max_steps_per_run": 10,
-        "max_retries": 2,
-        "download_timeout": 60,
-        "error_code_mapping": {
-          "invoice_not_found": "No invoice exists for the requested period",
-          "access_denied": "The account lacks permission to view billing documents"
-        }
-      },
-      {
-        "block_type": "send_email",
-        "label": "email_to_accounting",
-        "next_block_label": null,
-        "smtp_host_secret_parameter_key": "smtp_host",
-        "smtp_port_secret_parameter_key": "smtp_port",
-        "smtp_username_secret_parameter_key": "smtp_username",
-        "smtp_password_secret_parameter_key": "smtp_password",
-        "sender": "automation@example.com",
-        "recipients": ["accounting@example.com"],
-        "subject": "Supplier portal invoice — {{ invoice_month }}",
-        "body": "Attached is the supplier portal invoice for {{ invoice_month }}.",
-        "file_attachments": ["SKYVERN_DOWNLOAD_DIRECTORY"]
-      }
-    ],
-    "finally_block_label": null
-  }
-}
-```
-
-**Why this is correct — the reasoning to imitate:**
-
-- `login`, never a hand-rolled navigation login — 2FA and credentials become
-  the platform's problem, and it stays correct across Skyvern upgrades.
-- `goto_url` for the invoices page: a **stable** path, not a session-bound
-  filtered URL, so it replays from cache.
-- `file_download` rather than `navigation`: it detects download completion;
-  `navigation` would declare victory before the file lands. There is
-  deliberately **no** validation block after it — "a file was downloaded" is
-  not page-observable, and a failed download already fails the block itself;
-  adding one would violate the completion-criteria rule above for the sake of
-  having a tripwire.
-- The download goal carries all four prompt-anatomy parts, references the row
-  **visually** ("marked with a PDF icon"), pre-handles popups, and its
-  completion criterion is the observable file, not "the invoice was obtained."
-- One `validation` block, right after login — the one place a wrong state
-  would silently corrupt everything downstream.
-- `error_code_mapping` values are natural-language conditions, so a caller's
-  downstream system can branch on them regardless of the site's exact error
-  text.
-- The attachment is the `SKYVERN_DOWNLOAD_DIRECTORY` literal, not a Jinja
-  reference to the download block's output (which would render a dict, not a
-  path, and fail).
-- SMTP settings are bound as `aws_secret` parameters and referenced by key —
-  never inlined. `send_email` has no `parameter_keys` field; `{{ invoice_month }}`
-  in `subject`/`body` still renders because the block template-formats those
-  fields itself.
-
 ## Optimization mode (existing JSON supplied)
 
 Refactor, don't rewrite. Preserve every block label and parameter key unless
@@ -495,12 +366,9 @@ readability. Add a `## Changelog` section before `## Workflow JSON`:
 workflow is already sound, say so and propose only changes that carry their
 weight.
 
-## Calibration references (Skyvern monorepo only)
+## Calibration references in this repo
 
-Only when this checkout is the Skyvern monorepo itself: before writing your
-first JSON of a session, skim one of
+Before writing your first JSON of a session, skim one of
 `skills/skyvern/examples/{login-and-extract,multi-page-form,conditional-retry}.json`
 for house style, and `skyvern/forge/prompts/skyvern/workflow_knowledge_base.txt`
 ("COMPLETE WORKFLOW EXAMPLE" section) for the copilot's own reference shape.
-In any other repo, use this skill's own `## Worked example` section and the
-`## Self-validation checklist` as your calibration instead.
