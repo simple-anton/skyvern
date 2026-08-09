@@ -33,6 +33,18 @@
               "name": "uiBaseUrl",
               "value": "http://rnd-gpu3.node.dev.ostrovok.in:8080",
               "type": "string"
+            },
+            {
+              "id": "cfg-3",
+              "name": "maxParserWaitMinutes",
+              "value": 30,
+              "type": "number"
+            },
+            {
+              "id": "cfg-4",
+              "name": "maxLoginWaitMinutes",
+              "value": 15,
+              "type": "number"
             }
           ]
         },
@@ -476,7 +488,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Normalizes the entry item into the login chain. Entered from two places:\n// bootstrap (no profile in Feeds yet) and recovery (parser attempt with an existing\n// profile failed). The previous parser attempt travels in the item itself instead of\n// $('Node').isExecuted, so every reference stays scoped to THIS loop iteration.\nconst j = $input.first().json || {};\nreturn [{ json: {\n  is_recovery: !!j.parser_run_id,\n  prev_parser_run_id: j.parser_run_id || '',\n  prev_parser_status: j.final_status || ''\n} }];"
+        "jsCode": "// Normalizes the entry item into the login chain. Entered from two places:\n// bootstrap (no profile in Feeds yet) and recovery (parser attempt with an existing\n// profile failed). The previous parser attempt travels in the item itself instead of\n// $('Node').isExecuted, so every reference stays scoped to THIS loop iteration.\nconst j = $input.first().json || {};\nreturn [{ json: {\n  is_recovery: !!j.parser_run_id,\n  prev_parser_run_id: j.parser_run_id || '',\n  prev_parser_status: j.final_status || '',\n  login_started_at: new Date().toISOString()\n} }];"
       },
       "id": "ea9e624b-eadb-4a57-b539-2edb60579234",
       "name": "Login Context",
@@ -519,7 +531,7 @@
         "resume": "webhook",
         "httpMethod": "POST",
         "limitWaitTime": true,
-        "resumeAmount": 10,
+        "resumeAmount": 5,
         "resumeUnit": "minutes",
         "options": {}
       },
@@ -803,7 +815,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Single convergence point right before Dispatch Parser. Downstream nodes read the\n// current attempt from here — it re-runs before EVERY parser dispatch in this\n// iteration, so its data can never leak in from a previous loop iteration.\nconst j = $input.first().json || {};\nreturn [{ json: {\n  profile_id: j.profile_id || '',\n  allow_login_recovery: j.allow_login_recovery === true || j.allow_login_recovery === 'true',\n  login_attempted: j.login_attempted === true || j.login_attempted === 'true',\n  login_run_id: j.login_run_id || ''\n} }];"
+        "jsCode": "// Single convergence point right before Dispatch Parser. Downstream nodes read the\n// current attempt from here — it re-runs before EVERY parser dispatch in this\n// iteration, so its data can never leak in from a previous loop iteration.\nconst j = $input.first().json || {};\nreturn [{ json: {\n  profile_id: j.profile_id || '',\n  allow_login_recovery: j.allow_login_recovery === true || j.allow_login_recovery === 'true',\n  login_attempted: j.login_attempted === true || j.login_attempted === 'true',\n  login_run_id: j.login_run_id || '',\n  attempt_started_at: j.attempt_started_at || new Date().toISOString()\n} }];"
       },
       "id": "cbb99506-16d5-4090-9106-071443761338",
       "name": "Prepare Attempt",
@@ -846,7 +858,7 @@
         "resume": "webhook",
         "httpMethod": "POST",
         "limitWaitTime": true,
-        "resumeAmount": 10,
+        "resumeAmount": 5,
         "resumeUnit": "minutes",
         "options": {}
       },
@@ -1287,6 +1299,87 @@
         64,
         1900
       ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "kwp-1",
+              "leftValue": "={{ !['completed','failed','terminated','canceled','timed_out'].includes($json.status) && ($now.toMillis() - DateTime.fromISO($('Prepare Attempt').first().json.attempt_started_at).toMillis()) < $('Config').first().json.maxParserWaitMinutes * 60 * 1000 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ba5604b5-e7e3-486a-bb92-6d658cf0f1a7",
+      "name": "IF Keep Waiting (Parser)?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3072,
+        2780
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "kwl-1",
+              "leftValue": "={{ !['completed','failed','terminated','canceled','timed_out'].includes($json.status) && ($now.toMillis() - DateTime.fromISO($('Login Context').first().json.login_started_at).toMillis()) < $('Config').first().json.maxLoginWaitMinutes * 60 * 1000 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3f69d4e2-cb93-4cea-968a-acf853287f49",
+      "name": "IF Keep Waiting (Login)?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1280,
+        3600
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Почему был каскад ложных timeout (и как починено)\nresumeUrl у n8n общий на весь execution и НЕ знает, к какому прогону относится колбэк. Один потерянный/опоздавший колбэк (Skyvern ретраит доставку всего 3 раза за пару секунд; на 404 не ретраит вовсе) сдвигал конвейер на единицу: колбэк прогона N будил ожидание прогона N+1, статус N+1 ещё running -> ложный 'timeout', и так по цепочке (след: интервалы между строками Jobs меньше длительности прогонов и 2 параллельных Running в Skyvern).\n\nТеперь пробуждение Wait — это только сигнал 'проверь статус', а не 'прогон завершён': после Get ... Run Status стоит IF Keep Waiting — если статус нефинальный и общий дедлайн (maxParserWaitMinutes / maxLoginWaitMinutes из Config) не вышел, возвращаемся в Wait. Чужой ранний колбэк = безвредная лишняя проверка; потерянный колбэк = подхват по 5-минутному таймауту цикла. 'timeout' в Jobs теперь означает: прогон реально не финализировался за maxParserWaitMinutes.",
+        "height": 480,
+        "width": 640
+      },
+      "id": "79c1bee6-3b5c-4ac9-ab6f-ae937b91d0d8",
+      "name": "Sticky Note - Callback Desync Fix",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        736,
+        1900
+      ]
     }
   ],
   "pinData": {},
@@ -1493,7 +1586,7 @@
       "main": [
         [
           {
-            "node": "Login Outcome",
+            "node": "IF Keep Waiting (Login)?",
             "type": "main",
             "index": 0
           }
@@ -1613,7 +1706,7 @@
       "main": [
         [
           {
-            "node": "Parser Outcome",
+            "node": "IF Keep Waiting (Parser)?",
             "type": "main",
             "index": 0
           }
@@ -1683,6 +1776,42 @@
         [
           {
             "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Keep Waiting (Parser)?": {
+      "main": [
+        [
+          {
+            "node": "Wait For Parser Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parser Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Keep Waiting (Login)?": {
+      "main": [
+        [
+          {
+            "node": "Wait For Login Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Login Outcome",
             "type": "main",
             "index": 0
           }
