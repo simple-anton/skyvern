@@ -1,0 +1,249 @@
+{
+  "title": "(DDA_V2) NEW Supplier Booking Search SEARCH_NAVIGATE",
+  "description": null,
+  "proxy_location": "RESIDENTIAL",
+  "webhook_callback_url": "",
+  "persist_browser_session": false,
+  "pin_saved_session_ip": false,
+  "browser_profile_id": null,
+  "browser_profile_key": null,
+  "model": {
+    "name": "openai/gemini-2.5-flash-lite"
+  },
+  "totp_verification_url": null,
+  "max_screenshot_scrolls": null,
+  "max_elapsed_time_minutes": null,
+  "extra_http_headers": {},
+  "workflow_definition": {
+    "version": 2,
+    "parameters": [
+      {
+        "key": "booking_id",
+        "description": null,
+        "parameter_type": "workflow",
+        "workflow_parameter_type": "string",
+        "default_value": null
+      },
+      {
+        "key": "website_url",
+        "description": null,
+        "parameter_type": "workflow",
+        "workflow_parameter_type": "string",
+        "default_value": null
+      }
+    ],
+    "blocks": [
+      {
+        "label": "Find_Booking",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "next_block_label": "Extract_Data",
+        "ignore_workflow_system_prompt": false,
+        "block_type": "task",
+        "title": "Find_Booking",
+        "url": "{{website_url}}",
+        "navigation_goal": "\n        *** OBJECTIVE: Open details for Booking ID '{{booking_id}}' ***\n        1. Navigate to the top menu, hover over 'Booking', and select 'Hotel Bookings' from the dropdown.\n        2. Locate the search filter area on the page.\n        3. Select the 'All Dates' radio button.\n        4. **CRITICAL**: Clear any existing text in the 'Booking ID' input field.\n        5. Enter '{{booking_id}}' into the 'Booking ID' field.\n        6. Click the 'Search' button.\n        7. Wait for the search results to load in the table below.\n        8. Locate the booking in the table and click the 'Details' button in the 'Action' column.\n\n        ### FINAL VERIFICATION\n        - Ensure the page loaded is the detailed booking view for '{{booking_id}}'.\n    ",
+        "data_extraction_goal": "",
+        "complete_criterion": "The detailed booking window/page for Booking ID '{{booking_id}}' is open and details are visible.",
+        "terminate_criterion": "A login or sign-in page requiring username/password is displayed instead of the authenticated back office, meaning the browser session is not logged in.",
+        "data_schema": null,
+        "error_code_mapping": null,
+        "max_retries": 1,
+        "max_steps_per_run": 8,
+        "complete_on_download": false,
+        "download_suffix": null,
+        "parameter_keys": [],
+        "totp_identifier": null,
+        "totp_verification_url": null,
+        "disable_cache": false,
+        "include_action_history_in_verification": false,
+        "engine": "skyvern-2.0"
+      },
+      {
+        "label": "Extract_Data",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "next_block_label": null,
+        "ignore_workflow_system_prompt": false,
+        "block_type": "extraction",
+        "url": "",
+        "title": "Extract_Data",
+        "data_extraction_goal": "Extract all specified booking details from the page into the provided format.",
+        "data_schema": {
+          "properties": {
+            "hotelName": {
+              "type": "string",
+              "description": "The primary name of the hotel.",
+              "title": "Hotel Name"
+            },
+            "address": {
+              "type": "string",
+              "description": "The full address of the hotel.",
+              "title": "Address"
+            },
+            "checkinDate": {
+              "type": "string",
+              "description": "Check-in date formatted as ISO-8601 (YYYY-MM-DD)",
+              "title": "Check-in Date"
+            },
+            "checkoutDate": {
+              "type": "string",
+              "description": "Check-out date formatted as ISO-8601 (YYYY-MM-DD)",
+              "title": "Check-out Date"
+            },
+            "guestCount": {
+              "type": "integer",
+              "description": "Total number of guests.",
+              "title": "Guest Count"
+            },
+            "guestNames": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "List of guest names.",
+              "title": "Guest Names"
+            },
+            "childrenCount": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Number of children, if specified.",
+              "title": "Children Count"
+            },
+            "supplierHotelName": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The name of the hotel as provided by the supplier.",
+              "title": "Supplier Hotel Name"
+            },
+            "roomCategory": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Room category or type.",
+              "title": "Room Category"
+            },
+            "mealPlan": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Meal plan (e.g., Breakfast included, Room Only).",
+              "title": "Meal Plan"
+            },
+            "bedType": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Type of bed (e.g., Double, Twin).",
+              "title": "Bed Type"
+            },
+            "phone": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Phone number of the hotel (digits only).",
+              "title": "Phone"
+            },
+            "ibn": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Internal Booking Number.",
+              "title": "Internal Booking Number (IBN)"
+            },
+            "hcn": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Hotel Confirmation Number.",
+              "title": "Hotel Confirmation Number (HCN)"
+            }
+          },
+          "required": [
+            "hotelName",
+            "address",
+            "checkinDate",
+            "checkoutDate",
+            "guestCount"
+          ],
+          "title": "BookingDetails",
+          "type": "object"
+        },
+        "max_retries": 0,
+        "max_steps_per_run": null,
+        "parameter_keys": [],
+        "disable_cache": false,
+        "engine": "skyvern-2.0"
+      }
+    ],
+    "finally_block_label": null,
+    "workflow_system_prompt": null
+  },
+  "is_saved_task": false,
+  "status": "published",
+  "run_with": "agent",
+  "adaptive_caching": false,
+  "code_version": 2,
+  "cache_key": "default",
+  "ai_fallback": false,
+  "enable_self_healing": false,
+  "run_sequentially": false
+}

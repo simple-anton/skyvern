@@ -1,0 +1,1703 @@
+{
+  "name": "Skyvern Parser - Profile-aware v2 (Suppliers/Feeds/Jobs)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "9f7d3f13-b18a-4b52-bc1e-555bd2a232d8",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1856,
+        3260
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-0",
+              "name": "spreadsheetId",
+              "value": "1ujtvlCNrqx50C_M5zmslJvSLoJD8yiCk6DYIm7voYCw",
+              "type": "string"
+            },
+            {
+              "id": "cfg-api",
+              "name": "apiBaseUrl",
+              "value": "http://rnd-gpu3.node.dev.ostrovok.in:8000",
+              "type": "string"
+            },
+            {
+              "id": "cfg-2",
+              "name": "uiBaseUrl",
+              "value": "http://rnd-gpu3.node.dev.ostrovok.in:8080",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ca85f97e-f702-4e1c-8635-a0b61ce2e1d6",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1632,
+        3260
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Suppliers",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "ee9bbb1f-2fd7-404f-8752-1a85c0e5d362",
+      "name": "Read Suppliers",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1408,
+        3072
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "4k9U3OVddgT1ueTI",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Suppliers sheet rows -> lookup object keyed by website_url\nconst rows = $input.all();\nconst map = {};\nfor (const item of rows) {\n  const r = item.json;\n  if (!r.website_url) continue;\n  map[r.website_url] = {\n    login_workflow_id: r.login_workflow_id,\n    parser_workflow_id: r.parser_workflow_id\n  };\n}\nreturn [{ json: map }];"
+      },
+      "id": "ab765d17-1753-4726-89f8-f2f72a6da929",
+      "name": "Build Suppliers Map",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1184,
+        3072
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Jobs",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "24122742-9579-4c7f-94fb-afbe61bfa0cf",
+      "name": "Read Jobs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1408,
+        3460
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "4k9U3OVddgT1ueTI",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "flt-1",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2f134401-7c20-4366-b704-09b1f19cfbf4",
+      "name": "Filter Pending Jobs",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -1184,
+        3460
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "36426abd-2f44-444b-a124-c05136a11c81",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -960,
+        3460
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "dd5f91aa-f5a3-4c0f-b30b-8da86417ca84",
+      "name": "Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        3660
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Feeds",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "63e3e1f3-466b-4934-b895-e854b98d95aa",
+      "name": "Read Feed Rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -736,
+        3260
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "4k9U3OVddgT1ueTI",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fresh per-job context. Feeds is re-read on EVERY iteration, so a profile saved by an\n// earlier job in this run is visible to later jobs of the same feed (no stale map, no\n// repeated logins for the same feed within one run).\nconst job = $('Loop Over Items').first().json;\nconst suppliers = $('Build Suppliers Map').first().json;\nconst feeds = $input.all().map(i => i.json);\nconst feed = feeds.find(f => f.feed_id && String(f.feed_id).trim() === String(job.feed_id).trim());\nif (!feed) {\n  return [{ json: { infra_error: \"feed_id '\" + job.feed_id + \"' not found in Feeds sheet\" } }];\n}\nconst supplier = suppliers[feed.website_url];\nif (!supplier || !supplier.login_workflow_id || !supplier.parser_workflow_id) {\n  return [{ json: { infra_error: \"Suppliers sheet has no login/parser workflow for website_url '\" + feed.website_url + \"'\" } }];\n}\nconst profileId = String(feed.browser_profile_id || '').trim();\nreturn [{ json: {\n  feed_id: String(feed.feed_id).trim(),\n  booking_id: job.booking_id,\n  row_number: job.row_number,\n  website_url: feed.website_url,\n  bitwarden_item_id_input: feed.bitwarden_item_id_input,\n  agent_code: feed.agent_code || '',\n  browser_profile_id: profileId,\n  had_profile: !!profileId,\n  login_workflow_id: supplier.login_workflow_id,\n  parser_workflow_id: supplier.parser_workflow_id\n} }];"
+      },
+      "id": "e6ae8f14-19eb-462c-b290-0f117fc1e9a2",
+      "name": "Build Job State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -512,
+        3260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ie-1",
+              "leftValue": "={{ !!$json.infra_error }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fe8d064e-00cd-4819-a876-61262da5a351",
+      "name": "IF Infra Error?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -288,
+        3260
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Jobs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $json.row_number }}",
+            "status": "processing"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "feed_id",
+              "displayName": "feed_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recovered_via_login",
+              "displayName": "recovered_via_login",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_run_at",
+              "displayName": "last_run_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "extracted_data",
+              "displayName": "extracted_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "parser_run_url",
+              "displayName": "parser_run_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "login_run_url",
+              "displayName": "login_run_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "a6f523f4-39dd-40e8-968a-1e150a45a042",
+      "name": "Mark Job Processing",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -64,
+        3160
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "4k9U3OVddgT1ueTI",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pex-1",
+              "leftValue": "={{ !!$('Build Job State').first().json.browser_profile_id }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "43e32bce-cb84-4b59-ae72-c7f90c986416",
+      "name": "IF Profile Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        160,
+        3160
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "aep-1",
+              "name": "profile_id",
+              "value": "={{ $('Build Job State').first().json.browser_profile_id }}",
+              "type": "string"
+            },
+            {
+              "id": "aep-2",
+              "name": "allow_login_recovery",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "aep-3",
+              "name": "login_attempted",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "aep-4",
+              "name": "login_run_id",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "986fb361-244b-48f9-86d1-adf0e42543ca",
+      "name": "Attempt: Existing Profile",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        384,
+        2980
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalizes the entry item into the login chain. Entered from two places:\n// bootstrap (no profile in Feeds yet) and recovery (parser attempt with an existing\n// profile failed). The previous parser attempt travels in the item itself instead of\n// $('Node').isExecuted, so every reference stays scoped to THIS loop iteration.\nconst j = $input.first().json || {};\nreturn [{ json: {\n  is_recovery: !!j.parser_run_id,\n  prev_parser_run_id: j.parser_run_id || '',\n  prev_parser_status: j.final_status || ''\n} }];"
+      },
+      "id": "ea9e624b-eadb-4a57-b539-2edb60579234",
+      "name": "Login Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        3400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.apiBaseUrl }}/api/v1/workflows/{{ $('Build Job State').first().json.login_workflow_id }}/run",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "skyvernApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: { website_url: $('Build Job State').first().json.website_url, bitwarden_item_id_input: $('Build Job State').first().json.bitwarden_item_id_input, agent_code: $('Build Job State').first().json.agent_code }, webhook_callback_url: $execution.resumeUrl }) }}",
+        "options": {}
+      },
+      "id": "4f523a78-c9be-4118-bc73-c5667b31815c",
+      "name": "Dispatch Login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        608,
+        3400
+      ],
+      "credentials": {
+        "skyvernApi": {
+          "id": "sJZJu3m0wTUqZ2Nr",
+          "name": "Skyvern account OLD"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "limitWaitTime": true,
+        "resumeAmount": 10,
+        "resumeUnit": "minutes",
+        "options": {}
+      },
+      "id": "021ec293-70c6-4700-9835-10bdd5f63293",
+      "name": "Wait For Login Callback",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        832,
+        3400
+      ],
+      "webhookId": "wait-poll-login"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.apiBaseUrl }}/api/v1/workflows/{{ $('Build Job State').first().json.login_workflow_id }}/runs/{{ $('Dispatch Login').first().json.workflow_run_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "skyvernApi",
+        "options": {}
+      },
+      "id": "a1101a5d-7880-4228-b4e5-136a4d594b65",
+      "name": "Get Login Run Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1056,
+        3400
+      ],
+      "credentials": {
+        "skyvernApi": {
+          "id": "sJZJu3m0wTUqZ2Nr",
+          "name": "Skyvern account OLD"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize the login run result. timed_out IS a final Skyvern status; anything still\n// not final after the wait limit is an n8n-side timeout.\nconst run = $input.first().json;\nconst state = $('Build Job State').first().json;\nconst FINAL = ['completed', 'failed', 'terminated', 'canceled', 'timed_out'];\nconst login_status = run.status === 'completed' ? 'completed' : (FINAL.includes(run.status) ? 'failed' : 'timeout');\n// The first-ever login for a profile key may report the created profile only in\n// browser_sink_profile_id (browser_profile_id can be null on that run) — coalesce.\nconst new_profile_id = run.browser_sink_profile_id || run.browser_profile_id || '';\nreturn [{ json: {\n  login_status: login_status,\n  login_run_id: $('Dispatch Login').first().json.workflow_run_id,\n  new_profile_id: new_profile_id,\n  profile_id_for_sheet: new_profile_id || state.browser_profile_id || ''\n} }];"
+      },
+      "id": "3f26c781-96b7-42dc-9a1c-b22e8af43960",
+      "name": "Login Outcome",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        3400
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Feeds",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "feed_id": "={{ $('Build Job State').first().json.feed_id }}",
+            "browser_profile_id": "={{ $json.profile_id_for_sheet }}",
+            "last_login_status": "={{ $json.login_status }}",
+            "last_login_at": "={{ $now.toISO() }}",
+            "last_login_run_url": "={{ $('Config').first().json.uiBaseUrl }}/runs/{{ $json.login_run_id }}"
+          },
+          "matchingColumns": [
+            "feed_id"
+          ],
+          "schema": [
+            {
+              "id": "TPP",
+              "displayName": "TPP",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "feed_id",
+              "displayName": "feed_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "website_url",
+              "displayName": "website_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bitwarden_item_id_input",
+              "displayName": "bitwarden_item_id_input",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "agent_code",
+              "displayName": "agent_code",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "browser_profile_id",
+              "displayName": "browser_profile_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_login_status",
+              "displayName": "last_login_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_login_at",
+              "displayName": "last_login_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_login_run_url",
+              "displayName": "last_login_run_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "cc1a7b4c-8ae4-46e1-a124-ed63cb91d8fe",
+      "name": "Update Feed Profile Info",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1504,
+        3400
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "4k9U3OVddgT1ueTI",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "lok-1",
+              "leftValue": "={{ $('Login Outcome').first().json.login_status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "170bd070-ecf5-496e-9142-61d97bf907d0",
+      "name": "IF Login Succeeded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1728,
+        3400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "aal-1",
+              "name": "profile_id",
+              "value": "={{ $('Login Outcome').first().json.new_profile_id || $('Build Job State').first().json.browser_profile_id }}",
+              "type": "string"
+            },
+            {
+              "id": "aal-2",
+              "name": "allow_login_recovery",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "aal-3",
+              "name": "login_attempted",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "aal-4",
+              "name": "login_run_id",
+              "value": "={{ $('Login Outcome').first().json.login_run_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0298a38d-2ec0-4121-a15f-dcc7b4b73cd5",
+      "name": "Attempt: After Login",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1952,
+        3200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Login failed or timed out — the job is final. Uses only same-iteration references:\n// Login Context / Login Outcome always ran on this path in this iteration.\nconst state = $('Build Job State').first().json;\nconst lo = $('Login Outcome').first().json;\nconst ctx = $('Login Context').first().json;\nconst ui = $('Config').first().json.uiBaseUrl;\nconst label = state.had_profile ? 'profile expired' : 'no profile';\nconst recovered = label + (lo.login_status === 'timeout' ? ' — login timed out' : ' — login failed');\nreturn [{ json: {\n  row_number: state.row_number,\n  final_status: 'failed',\n  recovered_via_login: recovered,\n  workflow_run_id: ctx.prev_parser_run_id,\n  extracted_data: '',\n  parser_run_url: ctx.prev_parser_run_id ? ui + '/runs/' + ctx.prev_parser_run_id : '',\n  login_run_url: lo.login_run_id ? ui + '/runs/' + lo.login_run_id : ''\n} }];"
+      },
+      "id": "124e46c3-5baa-4301-8e50-d2d77ef655b2",
+      "name": "Login Failed Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        3600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Single convergence point right before Dispatch Parser. Downstream nodes read the\n// current attempt from here — it re-runs before EVERY parser dispatch in this\n// iteration, so its data can never leak in from a previous loop iteration.\nconst j = $input.first().json || {};\nreturn [{ json: {\n  profile_id: j.profile_id || '',\n  allow_login_recovery: j.allow_login_recovery === true || j.allow_login_recovery === 'true',\n  login_attempted: j.login_attempted === true || j.login_attempted === 'true',\n  login_run_id: j.login_run_id || ''\n} }];"
+      },
+      "id": "cbb99506-16d5-4090-9106-071443761338",
+      "name": "Prepare Attempt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2176,
+        2980
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.apiBaseUrl }}/api/v1/workflows/{{ $('Build Job State').first().json.parser_workflow_id }}/run",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "skyvernApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (function(){ const state = $('Build Job State').first().json; const attempt = $('Prepare Attempt').first().json; const body = { data: { website_url: state.website_url, booking_id: state.booking_id }, webhook_callback_url: $execution.resumeUrl }; if (attempt.profile_id) { body.browser_profile_id = attempt.profile_id; } return JSON.stringify(body); })() }}",
+        "options": {}
+      },
+      "id": "9a958fe4-01ae-47a5-acae-cf5f9084f996",
+      "name": "Dispatch Parser",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        2980
+      ],
+      "credentials": {
+        "skyvernApi": {
+          "id": "sJZJu3m0wTUqZ2Nr",
+          "name": "Skyvern account OLD"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "POST",
+        "limitWaitTime": true,
+        "resumeAmount": 10,
+        "resumeUnit": "minutes",
+        "options": {}
+      },
+      "id": "e421ce51-07c9-4040-9e15-d0740efb3ef3",
+      "name": "Wait For Parser Callback",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2624,
+        2980
+      ],
+      "webhookId": "wait-poll-parser"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.apiBaseUrl }}/api/v1/workflows/{{ $('Build Job State').first().json.parser_workflow_id }}/runs/{{ $('Dispatch Parser').first().json.workflow_run_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "skyvernApi",
+        "options": {}
+      },
+      "id": "87d504e2-398f-4f32-9375-408de29bcf25",
+      "name": "Get Parser Run Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2848,
+        2980
+      ],
+      "credentials": {
+        "skyvernApi": {
+          "id": "sJZJu3m0wTUqZ2Nr",
+          "name": "Skyvern account OLD"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize the parser run result and bundle it with the attempt state so downstream\n// IF/Finalize nodes only ever read $json (no cross-iteration node references).\nconst run = $input.first().json;\nconst attempt = $('Prepare Attempt').first().json;\nconst state = $('Build Job State').first().json;\nconst FINAL = ['completed', 'failed', 'terminated', 'canceled', 'timed_out'];\nlet final_status;\nif (run.status === 'completed') final_status = 'completed';\nelse if (FINAL.includes(run.status)) final_status = 'failed';\nelse final_status = 'timeout';\nlet extracted = '';\nconst info = run.outputs && run.outputs.extracted_information;\nif (info) { const first = Array.isArray(info) ? info[0] : info; extracted = JSON.stringify(first ?? info); }\nreturn [{ json: {\n  final_status: final_status,\n  skyvern_status: run.status || '',\n  failure_reason: run.failure_reason || '',\n  extracted_data: extracted,\n  parser_run_id: $('Dispatch Parser').first().json.workflow_run_id,\n  profile_id: attempt.profile_id,\n  allow_login_recovery: attempt.allow_login_recovery,\n  login_attempted: attempt.login_attempted,\n  login_run_id: attempt.login_run_id,\n  had_profile: state.had_profile,\n  row_number: state.row_number\n} }];"
+      },
+      "id": "98877131-0e7c-424f-9246-1c195ad2785c",
+      "name": "Parser Outcome",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3072,
+        2980
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "rec-1",
+              "leftValue": "={{ $json.final_status }}",
+              "rightValue": "failed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "rec-2",
+              "leftValue": "={{ $json.allow_login_recovery }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "249e0fb9-f393-4ec9-92ee-65eabe460074",
+      "name": "IF Parser Needs Recovery?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3296,
+        2980
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the final Jobs row from the (bundled) parser outcome only — $json carries\n// everything, including whether a login ran in THIS iteration.\nconst o = $input.first().json;\nconst ui = $('Config').first().json.uiBaseUrl;\nconst label = o.had_profile ? 'profile expired' : 'no profile';\nlet recovered;\nif (!o.login_attempted) {\n  if (o.final_status === 'completed') recovered = 'not needed';\n  else if (o.final_status === 'timeout') recovered = 'parser timed out (no recovery attempted)';\n  else recovered = 'parser failed (no recovery attempted)';\n} else {\n  if (o.final_status === 'completed') recovered = label + ' — logged in, parser succeeded';\n  else if (o.final_status === 'timeout') recovered = label + ' — logged in, but retry timed out';\n  else recovered = label + ' — logged in, but parser still failed';\n}\nreturn [{ json: {\n  row_number: o.row_number,\n  final_status: o.final_status,\n  recovered_via_login: recovered,\n  workflow_run_id: o.parser_run_id,\n  extracted_data: o.extracted_data,\n  parser_run_url: ui + '/runs/' + o.parser_run_id,\n  login_run_url: o.login_run_id ? ui + '/runs/' + o.login_run_id : ''\n} }];"
+      },
+      "id": "454fd77d-02cf-4b2a-a812-1d2095d06908",
+      "name": "Finalize Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        3160
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Jobs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $json.row_number }}",
+            "status": "={{ $json.final_status }}",
+            "workflow_run_id": "={{ $json.workflow_run_id }}",
+            "recovered_via_login": "={{ $json.recovered_via_login }}",
+            "last_run_at": "={{ $now.toISO() }}",
+            "extracted_data": "={{ $json.extracted_data }}",
+            "parser_run_url": "={{ $json.parser_run_url }}",
+            "login_run_url": "={{ $json.login_run_url }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "feed_id",
+              "displayName": "feed_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recovered_via_login",
+              "displayName": "recovered_via_login",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_run_at",
+              "displayName": "last_run_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "extracted_data",
+              "displayName": "extracted_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "parser_run_url",
+              "displayName": "parser_run_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "login_run_url",
+              "displayName": "login_run_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "ad162723-c7a2-4b87-99c2-cba7054f0a6f",
+      "name": "Write Job Result",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3744,
+        3300
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "4k9U3OVddgT1ueTI",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Jobs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $('Loop Over Items').first().json.row_number }}",
+            "status": "error",
+            "last_run_at": "={{ $now.toISO() }}",
+            "extracted_data": "={{ JSON.stringify({ error: $json.infra_error || ($json.error && ($json.error.message || $json.error)) || $json.message || 'unknown infrastructure error' }) }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "feed_id",
+              "displayName": "feed_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflow_run_id",
+              "displayName": "workflow_run_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recovered_via_login",
+              "displayName": "recovered_via_login",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_run_at",
+              "displayName": "last_run_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "extracted_data",
+              "displayName": "extracted_data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "parser_run_url",
+              "displayName": "parser_run_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "login_run_url",
+              "displayName": "login_run_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e5471e34-4753-42d3-8efc-7a5f21cb6732",
+      "name": "Record Infra Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3744,
+        3660
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "4k9U3OVddgT1ueTI",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## Схема Google Таблицы (3 вкладки)\n\n**\"Suppliers\"** (один поставщик = одна строка):\nwebsite_url | login_workflow_id | parser_workflow_id\n\n**\"Feeds\"** (один фид = одна строка; browser_profile_id ОСТАВЛЯЙТЕ ПУСТЫМ для новых фидов — система заполнит сама после первого логина; НЕ копируйте bp между строками — каждая строка = свой сайт+аккаунт = свой профиль):\nfeed_id | website_url | bitwarden_item_id_input | agent_code | browser_profile_id | last_login_status | last_login_at | last_login_run_url\n\n**\"Jobs\"** (один booking_id = одна строка):\nfeed_id | booking_id | status | workflow_run_id | recovered_via_login | last_run_at | extracted_data | parser_run_url | login_run_url\n\nСвязки: Jobs.feed_id -> Feeds.feed_id -> Feeds.website_url -> Suppliers.website_url.\nЧтобы добавить поставщика/фид/booking — просто строка в соответствующей вкладке, в n8n ничего менять не нужно.",
+        "height": 520,
+        "width": 640
+      },
+      "id": "c93fe860-69f2-4e65-b9ca-a1e40885a9c6",
+      "name": "Sticky Note - Sheet Schema",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1408,
+        1900
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Жизненный цикл профиля (v2)\n1. Feeds.browser_profile_id ПУСТ -> сначала логин-бот. Skyvern сам создаёт/находит managed-профиль по ключу {{website_url}}-{{bitwarden_item_id_input}} (Save & Reuse Session в логин-воркфлоу), его bp_... id пишется в Feeds. Парсер запускается один раз, уже с профилем.\n2. Профиль ЕСТЬ -> парсер запускается СРАЗУ с browser_profile_id из Feeds, логин не выполняется.\n3. Парсер упал (не таймаут) на попытке с существующим профилем -> ОДНО восстановление: логин обновляет тот же профиль, парсер перезапускается один раз.\n4. Feeds перечитывается на КАЖДОЙ итерации: второй job того же фида в одном прогоне видит профиль, созданный первым, и не логинится заново.\n\n## Главное исправление против v1\nНикаких $('Node').isExecuted / .first() на УСЛОВНЫХ нодах — в n8n они видят последний запуск ноды за весь execution, т.е. данные ПРЕДЫДУЩЕЙ итерации цикла. Из-за этого в v1 парсер следующего фида получал browser_profile_id предыдущего (след в Jobs: одинаковые login_run_url у разных фидов), а после первого восстановления все последующие джобы прогона лишались восстановления вовсе. Теперь всё состояние попытки едет в самих items: Login Context -> Login Outcome, Attempt: * -> Prepare Attempt -> Parser Outcome. Ссылки $('...') остались только на ноды, гарантированно выполняющиеся в текущей итерации.",
+        "height": 640,
+        "width": 720
+      },
+      "id": "8d2796d7-e4cd-471a-8809-8790c4da5d09",
+      "name": "Sticky Note - Profile Lifecycle",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        1900
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## После импорта обязательно:\n1. Config: spreadsheetId, apiBaseUrl (порт 8000), uiBaseUrl (порт 8080).\n2. Пересвязать credentials на всех Google Sheets и HTTP Request нодах.\n3. ВАЖНО: в Skyvern у КАЖДОГО парсер-воркфлоу выключить Save & Reuse Session (persist_browser_session=false). Иначе парсер копит один ОБЩИЙ профиль на все фиды и любой запуск без явного bp сидируется чужими куками. Логин-воркфлоу не трогать (Save & Reuse + Browser Profile Key = {{website_url}}-{{bitwarden_item_id_input}} — правильно).\n4. Wait-ноды: Resume = On Webhook Call, HTTP Method = POST, Limit Wait Time = 10 минут (настройки Wait не всегда переносятся импортом).\n5. Восстановление срабатывает на ЛЮБОЙ failed первой попытки с существующим профилем (один логин + один ретрай). Чтобы реагировать только на протухшую сессию — добавьте в парсер terminate_criterion про страницу логина (см. n8n/AUDIT.md) и фильтруйте в IF Parser Needs Recovery? по failure_reason (поле уже прокинуто в Parser Outcome).\n6. timed_out теперь финальный статус Skyvern (-> failed), а 'timeout' в Jobs означает только 'колбэк не пришёл за 10 минут'. Такой джоб подхватится следующим прогоном, но прежний Skyvern-ран может ещё выполняться.\n7. status='error' в Jobs = инфраструктурный сбой (Skyvern отверг диспатч, фид не найден, сеть) — смотреть в первую очередь.",
+        "height": 700,
+        "width": 640
+      },
+      "id": "a935b0fc-9917-4f1a-8af5-de78e6a2754e",
+      "name": "Sticky Note - Setup & Migration",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        64,
+        1900
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Read Suppliers",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Suppliers": {
+      "main": [
+        [
+          {
+            "node": "Build Suppliers Map",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Jobs": {
+      "main": [
+        [
+          {
+            "node": "Filter Pending Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Pending Jobs": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Feed Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Feed Rows": {
+      "main": [
+        [
+          {
+            "node": "Build Job State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Job State": {
+      "main": [
+        [
+          {
+            "node": "IF Infra Error?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Infra Error?": {
+      "main": [
+        [
+          {
+            "node": "Record Infra Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Job Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Job Processing": {
+      "main": [
+        [
+          {
+            "node": "IF Profile Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Profile Exists?": {
+      "main": [
+        [
+          {
+            "node": "Attempt: Existing Profile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Login Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attempt: Existing Profile": {
+      "main": [
+        [
+          {
+            "node": "Prepare Attempt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login Context": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Login": {
+      "main": [
+        [
+          {
+            "node": "Wait For Login Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Infra Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Login Callback": {
+      "main": [
+        [
+          {
+            "node": "Get Login Run Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Login Run Status": {
+      "main": [
+        [
+          {
+            "node": "Login Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Infra Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login Outcome": {
+      "main": [
+        [
+          {
+            "node": "Update Feed Profile Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Feed Profile Info": {
+      "main": [
+        [
+          {
+            "node": "IF Login Succeeded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Login Succeeded?": {
+      "main": [
+        [
+          {
+            "node": "Attempt: After Login",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Login Failed Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attempt: After Login": {
+      "main": [
+        [
+          {
+            "node": "Prepare Attempt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login Failed Result": {
+      "main": [
+        [
+          {
+            "node": "Write Job Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Attempt": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Parser": {
+      "main": [
+        [
+          {
+            "node": "Wait For Parser Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Infra Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait For Parser Callback": {
+      "main": [
+        [
+          {
+            "node": "Get Parser Run Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Parser Run Status": {
+      "main": [
+        [
+          {
+            "node": "Parser Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Infra Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser Outcome": {
+      "main": [
+        [
+          {
+            "node": "IF Parser Needs Recovery?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Parser Needs Recovery?": {
+      "main": [
+        [
+          {
+            "node": "Login Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Finalize Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Result": {
+      "main": [
+        [
+          {
+            "node": "Write Job Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Job Result": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Infra Error": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
