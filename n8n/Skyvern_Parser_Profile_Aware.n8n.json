@@ -222,7 +222,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Fresh per-job context. Feeds is re-read on EVERY iteration, so a profile saved by an\n// earlier job in this run is visible to later jobs of the same feed (no stale map, no\n// repeated logins for the same feed within one run).\nconst job = $('Loop Over Items').first().json;\nconst suppliers = $('Build Suppliers Map').first().json;\nconst feeds = $input.all().map(i => i.json);\nconst feed = feeds.find(f => f.feed_id && String(f.feed_id).trim() === String(job.feed_id).trim());\nif (!feed) {\n  return [{ json: { infra_error: \"feed_id '\" + job.feed_id + \"' not found in Feeds sheet\" } }];\n}\nconst supplier = suppliers[feed.website_url];\nif (!supplier || !supplier.login_workflow_id || !supplier.parser_workflow_id) {\n  return [{ json: { infra_error: \"Suppliers sheet has no login/parser workflow for website_url '\" + feed.website_url + \"'\" } }];\n}\nconst profileId = String(feed.browser_profile_id || '').trim();\nreturn [{ json: {\n  feed_id: String(feed.feed_id).trim(),\n  booking_id: job.booking_id,\n  row_number: job.row_number,\n  website_url: feed.website_url,\n  bitwarden_item_id_input: feed.bitwarden_item_id_input,\n  agent_code: feed.agent_code || '',\n  browser_profile_id: profileId,\n  had_profile: !!profileId,\n  login_workflow_id: supplier.login_workflow_id,\n  parser_workflow_id: supplier.parser_workflow_id\n} }];"
+        "jsCode": "// Fresh per-job context. Feeds is re-read on EVERY iteration, so a profile saved by an\n// earlier job in this run is visible to later jobs of the same feed (no stale map, no\n// repeated logins for the same feed within one run).\nconst job = $('Loop Over Items').first().json;\nconst suppliers = $('Build Suppliers Map').first().json;\nconst feeds = $input.all().map(i => i.json);\nconst feed = feeds.find(f => f.feed_id && String(f.feed_id).trim() === String(job.feed_id).trim());\nif (!feed) {\n  return [{ json: { infra_error: \"feed_id '\" + job.feed_id + \"' not found in Feeds sheet\" } }];\n}\nconst supplier = suppliers[feed.website_url];\nif (!supplier || !supplier.login_workflow_id || !supplier.parser_workflow_id) {\n  return [{ json: { infra_error: \"Suppliers sheet has no login/parser workflow for website_url '\" + feed.website_url + \"'\" } }];\n}\nconst profileId = String(feed.browser_profile_id || '').trim();\nreturn [{ json: {\n  feed_id: String(feed.feed_id).trim(),\n  booking_id: job.booking_id,\n  row_number: job.row_number,\n  website_url: feed.website_url,\n  bitwarden_item_id_input: feed.bitwarden_item_id_input,\n  agent_code: feed.agent_code || '',\n  browser_profile_id: profileId,\n  had_profile: !!profileId,\n  login_workflow_id: supplier.login_workflow_id,\n  parser_workflow_id: supplier.parser_workflow_id,\n  use_browser_session: ['true','1','yes','да'].includes(String(feed.use_browser_session || '').trim().toLowerCase())\n} }];"
       },
       "id": "e6ae8f14-19eb-462c-b290-0f117fc1e9a2",
       "name": "Build Job State",
@@ -472,6 +472,12 @@
               "name": "login_run_id",
               "value": "",
               "type": "string"
+            },
+            {
+              "id": "aep-5",
+              "name": "browser_session_id",
+              "value": "",
+              "type": "string"
             }
           ]
         },
@@ -488,7 +494,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Normalizes the entry item into the login chain. Entered from two places:\n// bootstrap (no profile in Feeds yet) and recovery (parser attempt with an existing\n// profile failed). The previous parser attempt travels in the item itself instead of\n// $('Node').isExecuted, so every reference stays scoped to THIS loop iteration.\nconst j = $input.first().json || {};\nreturn [{ json: {\n  is_recovery: !!j.parser_run_id,\n  prev_parser_run_id: j.parser_run_id || '',\n  prev_parser_status: j.final_status || '',\n  login_started_at: new Date().toISOString()\n} }];"
+        "jsCode": "// Normalizes the entry item into the login chain. Entered from two places:\n// bootstrap (no profile in Feeds yet) and recovery (parser attempt with an existing\n// profile failed). The previous parser attempt travels in the item itself instead of\n// $('Node').isExecuted, so every reference stays scoped to THIS loop iteration.\nconst j = $input.first().json || {};\nreturn [{ json: {\n  is_recovery: !!j.parser_run_id,\n  prev_parser_run_id: j.parser_run_id || '',\n  prev_parser_status: j.final_status || '',\n  login_started_at: new Date().toISOString(),\n  browser_session_id: j.browser_session_id || ''\n} }];"
       },
       "id": "ea9e624b-eadb-4a57-b539-2edb60579234",
       "name": "Login Context",
@@ -507,7 +513,7 @@
         "nodeCredentialType": "skyvernApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ data: { website_url: $('Build Job State').first().json.website_url, bitwarden_item_id_input: $('Build Job State').first().json.bitwarden_item_id_input, agent_code: $('Build Job State').first().json.agent_code }, webhook_callback_url: $execution.resumeUrl }) }}",
+        "jsonBody": "={{ (function(){ const s = $('Build Job State').first().json; const ctx = $('Login Context').first().json; const body = { data: { website_url: s.website_url, bitwarden_item_id_input: s.bitwarden_item_id_input, agent_code: s.agent_code }, webhook_callback_url: $execution.resumeUrl }; if (ctx.browser_session_id) { body.browser_session_id = ctx.browser_session_id; } return JSON.stringify(body); })() }}",
         "options": {}
       },
       "id": "4f523a78-c9be-4118-bc73-c5667b31815c",
@@ -786,6 +792,12 @@
               "name": "login_run_id",
               "value": "={{ $('Login Outcome').first().json.login_run_id }}",
               "type": "string"
+            },
+            {
+              "id": "aal-5",
+              "name": "browser_session_id",
+              "value": "={{ $('Login Context').first().json.browser_session_id }}",
+              "type": "string"
             }
           ]
         },
@@ -815,7 +827,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Single convergence point right before Dispatch Parser. Downstream nodes read the\n// current attempt from here — it re-runs before EVERY parser dispatch in this\n// iteration, so its data can never leak in from a previous loop iteration.\nconst j = $input.first().json || {};\nreturn [{ json: {\n  profile_id: j.profile_id || '',\n  allow_login_recovery: j.allow_login_recovery === true || j.allow_login_recovery === 'true',\n  login_attempted: j.login_attempted === true || j.login_attempted === 'true',\n  login_run_id: j.login_run_id || '',\n  attempt_started_at: j.attempt_started_at || new Date().toISOString()\n} }];"
+        "jsCode": "// Single convergence point right before Dispatch Parser. Downstream nodes read the\n// current attempt from here — it re-runs before EVERY parser dispatch in this\n// iteration, so its data can never leak in from a previous loop iteration.\nconst j = $input.first().json || {};\nreturn [{ json: {\n  profile_id: j.profile_id || '',\n  allow_login_recovery: j.allow_login_recovery === true || j.allow_login_recovery === 'true',\n  login_attempted: j.login_attempted === true || j.login_attempted === 'true',\n  login_run_id: j.login_run_id || '',\n  attempt_started_at: j.attempt_started_at || new Date().toISOString(),\n  browser_session_id: j.browser_session_id || ''\n} }];"
       },
       "id": "cbb99506-16d5-4090-9106-071443761338",
       "name": "Prepare Attempt",
@@ -834,7 +846,7 @@
         "nodeCredentialType": "skyvernApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ (function(){ const state = $('Build Job State').first().json; const attempt = $('Prepare Attempt').first().json; const body = { data: { website_url: state.website_url, booking_id: state.booking_id }, webhook_callback_url: $execution.resumeUrl }; if (attempt.profile_id) { body.browser_profile_id = attempt.profile_id; } return JSON.stringify(body); })() }}",
+        "jsonBody": "={{ (function(){ const state = $('Build Job State').first().json; const attempt = $('Prepare Attempt').first().json; const body = { data: { website_url: state.website_url, booking_id: state.booking_id }, webhook_callback_url: $execution.resumeUrl }; if (attempt.browser_session_id) { body.browser_session_id = attempt.browser_session_id; } else if (attempt.profile_id) { body.browser_profile_id = attempt.profile_id; } return JSON.stringify(body); })() }}",
         "options": {}
       },
       "id": "9a958fe4-01ae-47a5-acae-cf5f9084f996",
@@ -897,7 +909,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Normalize the parser run result and bundle it with the attempt state so downstream\n// IF/Finalize nodes only ever read $json (no cross-iteration node references).\nconst run = $input.first().json;\nconst attempt = $('Prepare Attempt').first().json;\nconst state = $('Build Job State').first().json;\nconst FINAL = ['completed', 'failed', 'terminated', 'canceled', 'timed_out'];\nlet final_status;\nif (run.status === 'completed') final_status = 'completed';\nelse if (FINAL.includes(run.status)) final_status = 'failed';\nelse final_status = 'timeout';\nlet extracted = '';\nconst info = run.outputs && run.outputs.extracted_information;\nif (info) { const first = Array.isArray(info) ? info[0] : info; extracted = JSON.stringify(first ?? info); }\nreturn [{ json: {\n  final_status: final_status,\n  skyvern_status: run.status || '',\n  failure_reason: run.failure_reason || '',\n  extracted_data: extracted,\n  parser_run_id: $('Dispatch Parser').first().json.workflow_run_id,\n  profile_id: attempt.profile_id,\n  allow_login_recovery: attempt.allow_login_recovery,\n  login_attempted: attempt.login_attempted,\n  login_run_id: attempt.login_run_id,\n  had_profile: state.had_profile,\n  row_number: state.row_number\n} }];"
+        "jsCode": "// Normalize the parser run result and bundle it with the attempt state so downstream\n// IF/Finalize nodes only ever read $json (no cross-iteration node references).\nconst run = $input.first().json;\nconst attempt = $('Prepare Attempt').first().json;\nconst state = $('Build Job State').first().json;\nconst FINAL = ['completed', 'failed', 'terminated', 'canceled', 'timed_out'];\nlet final_status;\nif (run.status === 'completed') final_status = 'completed';\nelse if (FINAL.includes(run.status)) final_status = 'failed';\nelse final_status = 'timeout';\nlet extracted = '';\nconst info = run.outputs && run.outputs.extracted_information;\nif (info) { const first = Array.isArray(info) ? info[0] : info; extracted = JSON.stringify(first ?? info); }\nreturn [{ json: {\n  final_status: final_status,\n  skyvern_status: run.status || '',\n  failure_reason: run.failure_reason || '',\n  extracted_data: extracted,\n  parser_run_id: $('Dispatch Parser').first().json.workflow_run_id,\n  profile_id: attempt.profile_id,\n  allow_login_recovery: attempt.allow_login_recovery,\n  login_attempted: attempt.login_attempted,\n  login_run_id: attempt.login_run_id,\n  had_profile: state.had_profile,\n  row_number: state.row_number,\n  browser_session_id: attempt.browser_session_id || ''\n} }];"
       },
       "id": "98877131-0e7c-424f-9246-1c195ad2785c",
       "name": "Parser Outcome",
@@ -1257,7 +1269,7 @@
     },
     {
       "parameters": {
-        "content": "## Схема Google Таблицы (3 вкладки)\n\n**\"Suppliers\"** (один поставщик = одна строка):\nwebsite_url | login_workflow_id | parser_workflow_id\n\n**\"Feeds\"** (один фид = одна строка; browser_profile_id ОСТАВЛЯЙТЕ ПУСТЫМ для новых фидов — система заполнит сама после первого логина; НЕ копируйте bp между строками — каждая строка = свой сайт+аккаунт = свой профиль):\nfeed_id | website_url | bitwarden_item_id_input | agent_code | browser_profile_id | last_login_status | last_login_at | last_login_run_url\n\n**\"Jobs\"** (один booking_id = одна строка):\nfeed_id | booking_id | status | workflow_run_id | recovered_via_login | last_run_at | extracted_data | parser_run_url | login_run_url\n\nСвязки: Jobs.feed_id -> Feeds.feed_id -> Feeds.website_url -> Suppliers.website_url.\nЧтобы добавить поставщика/фид/booking — просто строка в соответствующей вкладке, в n8n ничего менять не нужно.",
+        "content": "## Схема Google Таблицы (3 вкладки)\n\n**\"Suppliers\"** (один поставщик = одна строка):\nwebsite_url | login_workflow_id | parser_workflow_id\n\n**\"Feeds\"** (один фид = одна строка; browser_profile_id ОСТАВЛЯЙТЕ ПУСТЫМ для новых фидов — система заполнит сама после первого логина; НЕ копируйте bp между строками — каждая строка = свой сайт+аккаунт = свой профиль):\nfeed_id | website_url | bitwarden_item_id_input | agent_code | browser_profile_id | last_login_status | last_login_at | last_login_run_url | use_browser_session\n\nuse_browser_session: TRUE/1/yes -> для этого фида логин и парсер выполняются в ОДНОМ живом браузере (Browser Sessions API) вместо передачи профиля. Для 'упрямых' порталов, где сохранённая сессия не приживается (привязка к IP, sessionStorage-токены). Пусто/FALSE -> обычная быстрая схема с профилем.\n\n**\"Jobs\"** (один booking_id = одна строка):\nfeed_id | booking_id | status | workflow_run_id | recovered_via_login | last_run_at | extracted_data | parser_run_url | login_run_url\n\nСвязки: Jobs.feed_id -> Feeds.feed_id -> Feeds.website_url -> Suppliers.website_url.\nЧтобы добавить поставщика/фид/booking — просто строка в соответствующей вкладке, в n8n ничего менять не нужно.",
         "height": 520,
         "width": 640
       },
@@ -1378,6 +1390,151 @@
       "typeVersion": 1,
       "position": [
         736,
+        1900
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "us-1",
+              "leftValue": "={{ $('Build Job State').first().json.use_browser_session === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d1827718-6d9c-485d-be05-3c1992047da0",
+      "name": "IF Use Session?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        160,
+        3160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.apiBaseUrl }}/api/v1/browser_sessions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "skyvernApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ timeout: 45 }) }}",
+        "options": {}
+      },
+      "id": "8b9b5d16-6f0a-43a0-bb77-7430708c9ca5",
+      "name": "Create Browser Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        3560
+      ],
+      "credentials": {
+        "skyvernApi": {
+          "id": "sJZJu3m0wTUqZ2Nr",
+          "name": "Skyvern account OLD"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// One live browser for login + parse: same cookies in memory, same egress IP,\n// same fingerprint, sessionStorage intact. The session id rides the items from here.\nreturn [{ json: { browser_session_id: $input.first().json.browser_session_id } }];"
+      },
+      "id": "1bcc2c0f-fc46-4a5b-b879-0dfe26cca37f",
+      "name": "Session Created",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        3400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "sm-1",
+              "leftValue": "={{ $('Build Job State').first().json.use_browser_session === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4c803635-6b39-4486-97a3-18badd4118fc",
+      "name": "IF Session Mode?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3968,
+        3460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.apiBaseUrl }}/api/v1/browser_sessions/{{ $('Session Created').first().json.browser_session_id }}/close",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "skyvernApi",
+        "options": {}
+      },
+      "id": "959522af-573c-411b-aa63-7c76e40000a0",
+      "name": "Close Browser Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4192,
+        3560
+      ],
+      "credentials": {
+        "skyvernApi": {
+          "id": "sJZJu3m0wTUqZ2Nr",
+          "name": "Skyvern account OLD"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## Session-режим (use_browser_session в Feeds)\nДля порталов, где профиль не работает (сессия привязана к IP, токен в sessionStorage, fingerprint-чувствительность): джоб выполняется в одном живом браузере.\n\nПоток: Create Browser Session (timeout 45 мин) -> логин-бот с browser_session_id -> парсер с ТЕМ ЖЕ browser_session_id (профиль не передаётся — сессией управляет браузер) -> Close Browser Session после записи результата.\n\nОсобенности:\n- логин выполняется на КАЖДЫЙ джоб такого фида (браузер каждый раз свежий) — это цена надёжности;\n- восстановление логином внутри session-джоба не требуется (логин только что был) и не выполняется;\n- browser_profile_id в Feeds для таких фидов не используется и не обновляется;\n- если джоб упал по инфраструктурной ошибке до закрытия — сессия сама умрёт по таймауту 45 мин.",
+        "height": 520,
+        "width": 640
+      },
+      "id": "76b4e877-8ecd-49df-807e-2eb2bc18ba0e",
+      "name": "Sticky Note - Session Mode",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1440,
         1900
       ]
     }
@@ -1506,7 +1663,7 @@
       "main": [
         [
           {
-            "node": "IF Profile Exists?",
+            "node": "IF Use Session?",
             "type": "main",
             "index": 0
           }
@@ -1764,7 +1921,7 @@
       "main": [
         [
           {
-            "node": "Loop Over Items",
+            "node": "IF Session Mode?",
             "type": "main",
             "index": 0
           }
@@ -1812,6 +1969,82 @@
         [
           {
             "node": "Login Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Use Session?": {
+      "main": [
+        [
+          {
+            "node": "Create Browser Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Profile Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Browser Session": {
+      "main": [
+        [
+          {
+            "node": "Session Created",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Infra Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Created": {
+      "main": [
+        [
+          {
+            "node": "Login Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Session Mode?": {
+      "main": [
+        [
+          {
+            "node": "Close Browser Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close Browser Session": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
             "type": "main",
             "index": 0
           }
