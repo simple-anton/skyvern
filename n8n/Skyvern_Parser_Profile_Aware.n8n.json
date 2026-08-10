@@ -1129,7 +1129,7 @@
             "row_number": "={{ $('Loop Over Items').first().json.row_number }}",
             "status": "error",
             "last_run_at": "={{ $now.toISO() }}",
-            "extracted_data": "={{ JSON.stringify({ error: $json.infra_error || ($json.error && ($json.error.message || $json.error)) || $json.message || 'unknown infrastructure error' }) }}"
+            "extracted_data": "={{ JSON.stringify({ error: $json.infra_error || ($json.error && ($json.error.message || $json.error)) || $json.message || 'unknown infrastructure error', http_code: ($json.error && $json.error.httpCode) || undefined, details: ($json.error && ($json.error.description || ($json.error.cause && $json.error.cause.message))) || undefined }) }}"
           },
           "matchingColumns": [
             "row_number"
