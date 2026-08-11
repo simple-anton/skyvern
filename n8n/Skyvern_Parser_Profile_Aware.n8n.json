@@ -532,8 +532,8 @@
       ],
       "credentials": {
         "skyvernApi": {
-          "id": "sJZJu3m0wTUqZ2Nr",
-          "name": "Skyvern account OLD"
+          "id": "SELECT_SKYVERN_CREDENTIAL",
+          "name": "Skyvern account dev"
         }
       },
       "onError": "continueErrorOutput"
@@ -574,8 +574,8 @@
       ],
       "credentials": {
         "skyvernApi": {
-          "id": "sJZJu3m0wTUqZ2Nr",
-          "name": "Skyvern account OLD"
+          "id": "SELECT_SKYVERN_CREDENTIAL",
+          "name": "Skyvern account dev"
         }
       },
       "onError": "continueErrorOutput"
@@ -875,8 +875,8 @@
       ],
       "credentials": {
         "skyvernApi": {
-          "id": "sJZJu3m0wTUqZ2Nr",
-          "name": "Skyvern account OLD"
+          "id": "SELECT_SKYVERN_CREDENTIAL",
+          "name": "Skyvern account dev"
         }
       },
       "onError": "continueErrorOutput"
@@ -917,8 +917,8 @@
       ],
       "credentials": {
         "skyvernApi": {
-          "id": "sJZJu3m0wTUqZ2Nr",
-          "name": "Skyvern account OLD"
+          "id": "SELECT_SKYVERN_CREDENTIAL",
+          "name": "Skyvern account dev"
         }
       },
       "onError": "continueErrorOutput"
@@ -1315,7 +1315,7 @@
     },
     {
       "parameters": {
-        "content": "## После импорта обязательно:\n1. Config: spreadsheetId; apiBaseUrl = адрес API БЕЗ завершающего слэша (ноды сами добавляют /api/v1/...); uiBaseUrl = адрес UI (для ссылок {uiBaseUrl}/runs/...). Текущий сервер: https://skyvern-api.dev.srv.team и https://skyvern.dev.srv.team.\n1a. При переезде Skyvern на другой сервер: это НОВАЯ БД — обновить wpid_ в Suppliers, ОЧИСТИТЬ browser_profile_id и last_login_* в Feeds (старые bp_ там не существуют), пересоздать credential с новым API-ключом и выбрать его на всех 4 HTTP-нодах.\n2. Пересвязать credentials на всех Google Sheets и HTTP Request нодах.\n3. ВАЖНО: в Skyvern у КАЖДОГО парсер-воркфлоу выключить Save & Reuse Session (persist_browser_session=false). Иначе парсер копит один ОБЩИЙ профиль на все фиды и любой запуск без явного bp сидируется чужими куками. Логин-воркфлоу не трогать (Save & Reuse + Browser Profile Key = {{website_url}}-{{bitwarden_item_id_input}} — правильно).\n4. Wait-ноды: Resume = On Webhook Call, HTTP Method = POST, Limit Wait Time = 10 минут (настройки Wait не всегда переносятся импортом).\n5. Восстановление срабатывает на ЛЮБОЙ failed первой попытки с существующим профилем (один логин + один ретрай). Чтобы реагировать только на протухшую сессию — добавьте в парсер terminate_criterion про страницу логина (см. n8n/AUDIT.md) и фильтруйте в IF Parser Needs Recovery? по failure_reason (поле уже прокинуто в Parser Outcome).\n6. timed_out теперь финальный статус Skyvern (-> failed), а 'timeout' в Jobs означает только 'колбэк не пришёл за 10 минут'. Такой джоб подхватится следующим прогоном, но прежний Skyvern-ран может ещё выполняться.\n7. status='error' в Jobs = инфраструктурный сбой (Skyvern отверг диспатч, фид не найден, сеть) — смотреть в первую очередь.",
+        "content": "## После импорта обязательно:\n1. Config: spreadsheetId; apiBaseUrl = адрес API БЕЗ завершающего слэша (ноды сами добавляют /api/v1/...); uiBaseUrl = адрес UI (для ссылок {uiBaseUrl}/runs/...). Текущий сервер: https://skyvern-api.dev.srv.team и https://skyvern.dev.srv.team.\n1a. При переезде Skyvern на другой сервер: это НОВАЯ БД — обновить wpid_ в Suppliers, ОЧИСТИТЬ browser_profile_id и last_login_* в Feeds (старые bp_ там не существуют), пересоздать credential с новым API-ключом и выбрать его на всех 4 HTTP-нодах.\n2. Пересвязать credentials на всех Google Sheets и ВСЕХ ШЕСТИ Skyvern HTTP нодах: Dispatch Login, Get Login Run Status, Dispatch Parser, Get Parser Run Status, Create Browser Session, Check Browser Session.\n2a. ВНИМАНИЕ: если в n8n остался credential от старого сервера — нода, привязанная к нему, молча уйдёт на новый сервер со СТАРЫМ ключом. Если у серверов совпадает SECRET_KEY, JWT расшифруется, но organization_id из старой БД на новом сервере не существует -> 404 'Organization not found'. Симптом: часть нод работает, часть отдаёт этот 404. Лечение — выбрать новый credential во ВСЕХ шести нодах (лучше удалить старый credential совсем).\n3. ВАЖНО: в Skyvern у КАЖДОГО парсер-воркфлоу выключить Save & Reuse Session (persist_browser_session=false). Иначе парсер копит один ОБЩИЙ профиль на все фиды и любой запуск без явного bp сидируется чужими куками. Логин-воркфлоу не трогать (Save & Reuse + Browser Profile Key = {{website_url}}-{{bitwarden_item_id_input}} — правильно).\n4. Wait-ноды: Resume = On Webhook Call, HTTP Method = POST, Limit Wait Time = 10 минут (настройки Wait не всегда переносятся импортом).\n5. Восстановление срабатывает на ЛЮБОЙ failed первой попытки с существующим профилем (один логин + один ретрай). Чтобы реагировать только на протухшую сессию — добавьте в парсер terminate_criterion про страницу логина (см. n8n/AUDIT.md) и фильтруйте в IF Parser Needs Recovery? по failure_reason (поле уже прокинуто в Parser Outcome).\n6. timed_out теперь финальный статус Skyvern (-> failed), а 'timeout' в Jobs означает только 'колбэк не пришёл за 10 минут'. Такой джоб подхватится следующим прогоном, но прежний Skyvern-ран может ещё выполняться.\n7. status='error' в Jobs = инфраструктурный сбой (Skyvern отверг диспатч, фид не найден, сеть) — смотреть в первую очередь.",
         "height": 700,
         "width": 640
       },
@@ -1463,8 +1463,8 @@
       ],
       "credentials": {
         "skyvernApi": {
-          "id": "sJZJu3m0wTUqZ2Nr",
-          "name": "Skyvern account OLD"
+          "id": "SELECT_SKYVERN_CREDENTIAL",
+          "name": "Skyvern account dev"
         }
       },
       "onError": "continueErrorOutput"
@@ -1547,8 +1547,8 @@
       ],
       "credentials": {
         "skyvernApi": {
-          "id": "sJZJu3m0wTUqZ2Nr",
-          "name": "Skyvern account OLD"
+          "id": "SELECT_SKYVERN_CREDENTIAL",
+          "name": "Skyvern account dev"
         }
       },
       "onError": "continueErrorOutput"
