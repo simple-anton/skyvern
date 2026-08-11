@@ -1445,7 +1445,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Config').first().json.apiBaseUrl }}/api/v1/browser_sessions",
+        "url": "={{ $('Config').first().json.apiBaseUrl }}/v1/browser_sessions",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "skyvernApi",
         "sendBody": true,
@@ -1532,7 +1532,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $('Config').first().json.apiBaseUrl }}/api/v1/browser_sessions/{{ $('Build Job State').first().json.browser_session_id }}",
+        "url": "={{ $('Config').first().json.apiBaseUrl }}/v1/browser_sessions/{{ $('Build Job State').first().json.browser_session_id }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "skyvernApi",
         "options": {}
