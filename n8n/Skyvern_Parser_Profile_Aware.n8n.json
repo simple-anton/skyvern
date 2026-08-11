@@ -45,6 +45,12 @@
               "name": "maxLoginWaitMinutes",
               "value": 15,
               "type": "number"
+            },
+            {
+              "id": "cfg-5",
+              "name": "sessionTimeoutMinutes",
+              "value": 120,
+              "type": "number"
             }
           ]
         },
@@ -222,7 +228,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Fresh per-job context. Feeds is re-read on EVERY iteration, so a profile saved by an\n// earlier job in this run is visible to later jobs of the same feed (no stale map, no\n// repeated logins for the same feed within one run).\nconst job = $('Loop Over Items').first().json;\nconst suppliers = $('Build Suppliers Map').first().json;\nconst feeds = $input.all().map(i => i.json);\nconst feed = feeds.find(f => f.feed_id && String(f.feed_id).trim() === String(job.feed_id).trim());\nif (!feed) {\n  return [{ json: { infra_error: \"feed_id '\" + job.feed_id + \"' not found in Feeds sheet\" } }];\n}\nconst supplier = suppliers[feed.website_url];\nif (!supplier || !supplier.login_workflow_id || !supplier.parser_workflow_id) {\n  return [{ json: { infra_error: \"Suppliers sheet has no login/parser workflow for website_url '\" + feed.website_url + \"'\" } }];\n}\nconst profileId = String(feed.browser_profile_id || '').trim();\nreturn [{ json: {\n  feed_id: String(feed.feed_id).trim(),\n  booking_id: job.booking_id,\n  row_number: job.row_number,\n  website_url: feed.website_url,\n  bitwarden_item_id_input: feed.bitwarden_item_id_input,\n  agent_code: feed.agent_code || '',\n  browser_profile_id: profileId,\n  had_profile: !!profileId,\n  login_workflow_id: supplier.login_workflow_id,\n  parser_workflow_id: supplier.parser_workflow_id,\n  use_browser_session: ['true','1','yes','да'].includes(String(feed.use_browser_session || '').trim().toLowerCase())\n} }];"
+        "jsCode": "// Fresh per-job context. Feeds is re-read on EVERY iteration, so a profile saved by an\n// earlier job in this run is visible to later jobs of the same feed (no stale map, no\n// repeated logins for the same feed within one run).\nconst job = $('Loop Over Items').first().json;\nconst suppliers = $('Build Suppliers Map').first().json;\nconst feeds = $input.all().map(i => i.json);\nconst feed = feeds.find(f => f.feed_id && String(f.feed_id).trim() === String(job.feed_id).trim());\nif (!feed) {\n  return [{ json: { infra_error: \"feed_id '\" + job.feed_id + \"' not found in Feeds sheet\" } }];\n}\nconst supplier = suppliers[feed.website_url];\nif (!supplier || !supplier.login_workflow_id || !supplier.parser_workflow_id) {\n  return [{ json: { infra_error: \"Suppliers sheet has no login/parser workflow for website_url '\" + feed.website_url + \"'\" } }];\n}\nconst profileId = String(feed.browser_profile_id || '').trim();\nreturn [{ json: {\n  feed_id: String(feed.feed_id).trim(),\n  booking_id: job.booking_id,\n  row_number: job.row_number,\n  website_url: feed.website_url,\n  bitwarden_item_id_input: feed.bitwarden_item_id_input,\n  agent_code: feed.agent_code || '',\n  browser_profile_id: profileId,\n  had_profile: !!profileId,\n  login_workflow_id: supplier.login_workflow_id,\n  parser_workflow_id: supplier.parser_workflow_id,\n  use_browser_session: ['true','1','yes','да'].includes(String(feed.use_browser_session || '').trim().toLowerCase()),\n  browser_session_id: String(feed.browser_session_id || '').trim()\n} }];"
       },
       "id": "e6ae8f14-19eb-462c-b290-0f117fc1e9a2",
       "name": "Build Job State",
@@ -608,7 +614,8 @@
             "browser_profile_id": "={{ $json.profile_id_for_sheet }}",
             "last_login_status": "={{ $json.login_status }}",
             "last_login_at": "={{ $now.toISO() }}",
-            "last_login_run_url": "={{ $('Config').first().json.uiBaseUrl }}/runs/{{ $json.login_run_id }}"
+            "last_login_run_url": "={{ $('Config').first().json.uiBaseUrl }}/runs/{{ $json.login_run_id }}",
+            "browser_session_id": "={{ $('Login Context').first().json.browser_session_id || $('Build Job State').first().json.browser_session_id || '' }}"
           },
           "matchingColumns": [
             "feed_id"
@@ -666,6 +673,15 @@
             {
               "id": "browser_profile_id",
               "displayName": "browser_profile_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "browser_session_id",
+              "displayName": "browser_session_id",
               "required": false,
               "defaultMatch": false,
               "display": true,
@@ -1269,7 +1285,7 @@
     },
     {
       "parameters": {
-        "content": "## Схема Google Таблицы (3 вкладки)\n\n**\"Suppliers\"** (один поставщик = одна строка):\nwebsite_url | login_workflow_id | parser_workflow_id\n\n**\"Feeds\"** (один фид = одна строка; browser_profile_id ОСТАВЛЯЙТЕ ПУСТЫМ для новых фидов — система заполнит сама после первого логина; НЕ копируйте bp между строками — каждая строка = свой сайт+аккаунт = свой профиль):\nfeed_id | website_url | bitwarden_item_id_input | agent_code | browser_profile_id | last_login_status | last_login_at | last_login_run_url | use_browser_session\n\nuse_browser_session: TRUE/1/yes -> для этого фида логин и парсер выполняются в ОДНОМ живом браузере (Browser Sessions API) вместо передачи профиля. Для 'упрямых' порталов, где сохранённая сессия не приживается (привязка к IP, sessionStorage-токены). Пусто/FALSE -> обычная быстрая схема с профилем.\n\n**\"Jobs\"** (один booking_id = одна строка):\nfeed_id | booking_id | status | workflow_run_id | recovered_via_login | last_run_at | extracted_data | parser_run_url | login_run_url\n\nСвязки: Jobs.feed_id -> Feeds.feed_id -> Feeds.website_url -> Suppliers.website_url.\nЧтобы добавить поставщика/фид/booking — просто строка в соответствующей вкладке, в n8n ничего менять не нужно.",
+        "content": "## Схема Google Таблицы (3 вкладки)\n\n**\"Suppliers\"** (один поставщик = одна строка):\nwebsite_url | login_workflow_id | parser_workflow_id\n\n**\"Feeds\"** (один фид = одна строка; browser_profile_id ОСТАВЛЯЙТЕ ПУСТЫМ для новых фидов — система заполнит сама после первого логина; НЕ копируйте bp между строками — каждая строка = свой сайт+аккаунт = свой профиль):\nfeed_id | website_url | bitwarden_item_id_input | agent_code | browser_profile_id | last_login_status | last_login_at | last_login_run_url | use_browser_session | browser_session_id\n\nuse_browser_session: TRUE/1/yes -> для этого фида логин и парсер выполняются в ОДНОМ живом браузере (Browser Sessions API) вместо передачи профиля. Для 'упрямых' порталов, где сохранённая сессия не приживается (привязка к IP, sessionStorage-токены). Пусто/FALSE -> обычная быстрая схема с профилем.\n\n**\"Jobs\"** (один booking_id = одна строка):\nfeed_id | booking_id | status | workflow_run_id | recovered_via_login | last_run_at | extracted_data | parser_run_url | login_run_url\n\nСвязки: Jobs.feed_id -> Feeds.feed_id -> Feeds.website_url -> Suppliers.website_url.\nЧтобы добавить поставщика/фид/booking — просто строка в соответствующей вкладке, в n8n ничего менять не нужно.",
         "height": 520,
         "width": 640
       },
@@ -1434,7 +1450,7 @@
         "nodeCredentialType": "skyvernApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ timeout: 45 }) }}",
+        "jsonBody": "={{ JSON.stringify({ timeout: $('Config').first().json.sessionTimeoutMinutes }) }}",
         "options": {}
       },
       "id": "8b9b5d16-6f0a-43a0-bb77-7430708c9ca5",
@@ -1468,6 +1484,21 @@
     },
     {
       "parameters": {
+        "content": "## Session-режим (use_browser_session в Feeds) — сессия живёт как профиль\nДля порталов, где сохранённый профиль не приживается (привязка к IP, sessionStorage-токены): фид работает в живой браузерной сессии, которая ПЕРЕИСПОЛЬЗУЕТСЯ между джобами и между прогонами, как раньше профиль.\n\nЛогика на каждый джоб:\n1. В Feeds.browser_session_id есть id -> GET /browser_sessions/{id}: сессия жива -> парсер запускается СРАЗУ в ней, без логина (браузер уже залогинен предыдущим джобом).\n2. Сессии нет / умерла -> Create Browser Session (timeout = sessionTimeoutMinutes из Config; активность продлевает жизнь, жёсткий потолок Skyvern — 24 ч) -> логин в ней -> парсер в ней. Новый pbs_... пишется в Feeds (нода Update Feed Profile Info).\n3. Парсер упал на переиспользованной сессии (токен протух, браузер жив) -> ОДИН re-login В ТОЙ ЖЕ сессии -> один повторный парсинг. Полная аналогия восстановления профиля.\n4. Сессии никто принудительно не закрывает — умирают сами по таймауту; редкий сирота (инфра-сбой до записи id в таблицу) тоже умрёт сам.\n\nПорядок джобов 1,1,2,1,1 работает как с профилями: у каждого фида своя строка и свой pbs, живой между джобами.\nЕсли сессия умерла ПОСРЕДИ джоба (между проверкой и диспатчем) — диспатч получит 404 -> джоб уйдёт в error и подхватится следующим прогоном уже с новой сессией.",
+        "height": 640,
+        "width": 640
+      },
+      "id": "76b4e877-8ecd-49df-807e-2eb2bc18ba0e",
+      "name": "Sticky Note - Session Mode",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        1900
+      ]
+    },
+    {
+      "parameters": {
         "conditions": {
           "options": {
             "caseSensitive": true,
@@ -1477,8 +1508,8 @@
           },
           "conditions": [
             {
-              "id": "sm-1",
-              "leftValue": "={{ $('Build Job State').first().json.use_browser_session === true }}",
+              "id": "sis-1",
+              "leftValue": "={{ !!$('Build Job State').first().json.browser_session_id }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -1490,30 +1521,29 @@
         },
         "options": {}
       },
-      "id": "4c803635-6b39-4486-97a3-18badd4118fc",
-      "name": "IF Session Mode?",
+      "id": "fe96b8cd-5e24-4cd0-bde3-f04caf701b89",
+      "name": "IF Session In Sheet?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        3968,
-        3460
+        272,
+        3360
       ]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Config').first().json.apiBaseUrl }}/api/v1/browser_sessions/{{ $('Session Created').first().json.browser_session_id }}/close",
+        "url": "={{ $('Config').first().json.apiBaseUrl }}/api/v1/browser_sessions/{{ $('Build Job State').first().json.browser_session_id }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "skyvernApi",
         "options": {}
       },
-      "id": "959522af-573c-411b-aa63-7c76e40000a0",
-      "name": "Close Browser Session",
+      "id": "0278e876-1b4f-4a21-a294-783f18142cdf",
+      "name": "Check Browser Session",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4192,
-        3560
+        48,
+        3520
       ],
       "credentials": {
         "skyvernApi": {
@@ -1521,21 +1551,86 @@
           "name": "Skyvern account OLD"
         }
       },
-      "onError": "continueRegularOutput"
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "content": "## Session-режим (use_browser_session в Feeds)\nДля порталов, где профиль не работает (сессия привязана к IP, токен в sessionStorage, fingerprint-чувствительность): джоб выполняется в одном живом браузере.\n\nПоток: Create Browser Session (timeout 45 мин) -> логин-бот с browser_session_id -> парсер с ТЕМ ЖЕ browser_session_id (профиль не передаётся — сессией управляет браузер) -> Close Browser Session после записи результата.\n\nОсобенности:\n- логин выполняется на КАЖДЫЙ джоб такого фида (браузер каждый раз свежий) — это цена надёжности;\n- восстановление логином внутри session-джоба не требуется (логин только что был) и не выполняется;\n- browser_profile_id в Feeds для таких фидов не используется и не обновляется;\n- если джоб упал по инфраструктурной ошибке до закрытия — сессия сама умрёт по таймауту 45 мин.",
-        "height": 520,
-        "width": 640
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "sal-1",
+              "leftValue": "={{ !$json.completed_at && !['completed','failed','timeout','terminated','closed'].includes(String($json.status || '')) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
-      "id": "76b4e877-8ecd-49df-807e-2eb2bc18ba0e",
-      "name": "Sticky Note - Session Mode",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
+      "id": "df086401-40c4-4b76-af1d-f2623b0be34f",
+      "name": "IF Session Alive?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
       "position": [
-        1440,
-        1900
+        272,
+        3520
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "aes-1",
+              "name": "profile_id",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "aes-2",
+              "name": "allow_login_recovery",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "aes-3",
+              "name": "login_attempted",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "aes-4",
+              "name": "login_run_id",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "aes-5",
+              "name": "browser_session_id",
+              "value": "={{ $('Build Job State').first().json.browser_session_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b387c7e5-2caf-4a66-8cc8-7e83cfb647ee",
+      "name": "Attempt: Existing Session",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        608,
+        2820
       ]
     }
   ],
@@ -1921,7 +2016,7 @@
       "main": [
         [
           {
-            "node": "IF Session Mode?",
+            "node": "Loop Over Items",
             "type": "main",
             "index": 0
           }
@@ -1979,7 +2074,7 @@
       "main": [
         [
           {
-            "node": "Create Browser Session",
+            "node": "IF Session In Sheet?",
             "type": "main",
             "index": 0
           }
@@ -2022,29 +2117,65 @@
         ]
       ]
     },
-    "IF Session Mode?": {
+    "IF Session In Sheet?": {
       "main": [
         [
           {
-            "node": "Close Browser Session",
+            "node": "Check Browser Session",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Loop Over Items",
+            "node": "Create Browser Session",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Close Browser Session": {
+    "Check Browser Session": {
       "main": [
         [
           {
-            "node": "Loop Over Items",
+            "node": "IF Session Alive?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Browser Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Session Alive?": {
+      "main": [
+        [
+          {
+            "node": "Attempt: Existing Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Browser Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attempt: Existing Session": {
+      "main": [
+        [
+          {
+            "node": "Prepare Attempt",
             "type": "main",
             "index": 0
           }
