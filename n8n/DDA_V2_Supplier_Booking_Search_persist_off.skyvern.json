@@ -91,10 +91,10 @@
               "description": "Check-out date formatted as ISO-8601 (YYYY-MM-DD)",
               "title": "Check-out Date"
             },
-            "guestCount": {
+            "adultCount": {
               "type": "integer",
-              "description": "Total number of guests.",
-              "title": "Guest Count"
+              "description": "Number of adult guests (excluding children).",
+              "title": "Adult Count"
             },
             "guestNames": {
               "anyOf": [
@@ -222,7 +222,7 @@
             "address",
             "checkinDate",
             "checkoutDate",
-            "guestCount"
+            "adultCount"
           ],
           "title": "BookingDetails",
           "type": "object"
