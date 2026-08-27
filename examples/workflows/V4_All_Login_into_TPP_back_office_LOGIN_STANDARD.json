@@ -1,0 +1,97 @@
+{
+  "title": "V4 (All) Login into TPP back office LOGIN_STANDARD",
+  "description": "v4: the login no longer stops at the welcomebeds.com homepage. It now also completes the one-time Ávoris back-office SSO handshake (welcomebeds -> Bookings -> Ávoris 'Agencies access' login -> redirected back to welcomebeds -> Bookings again -> Ávoris search page), which is the page a saved profile/session actually needs to contain cookies for. Without this, the saved session never had an authenticated Ávoris cookie in the first place, so any consumer (e.g. a parser workflow) reusing it always hit the Ávoris login form on its very first click, however well the profile/session sharing itself was configured.",
+  "proxy_location": "RESIDENTIAL_ISP",
+  "webhook_callback_url": "",
+  "persist_browser_session": true,
+  "pin_saved_session_ip": true,
+  "browser_profile_id": null,
+  "browser_profile_key": "{{website_url}}-{{bitwarden_item_id_input}}",
+  "model": {
+    "model_name": "custom/oat_562009497527468412"
+  },
+  "totp_verification_url": null,
+  "max_screenshot_scrolls": null,
+  "max_elapsed_time_minutes": 15,
+  "extra_http_headers": {},
+  "workflow_definition": {
+    "version": 2,
+    "parameters": [
+      {
+        "key": "website_url",
+        "description": null,
+        "parameter_type": "workflow",
+        "workflow_parameter_type": "string",
+        "default_value": null
+      },
+      {
+        "key": "bitwarden_item_id_input",
+        "description": "The specific Bitwarden Item ID for the login to use.",
+        "parameter_type": "workflow",
+        "workflow_parameter_type": "string",
+        "default_value": null
+      },
+      {
+        "key": "agent_code",
+        "description": "Optional code needed for some supplier logins.",
+        "parameter_type": "workflow",
+        "workflow_parameter_type": "string",
+        "default_value": ""
+      },
+      {
+        "key": "supplier_credentials",
+        "description": "Login credentials for the supplier portal",
+        "parameter_type": "bitwarden_login_credential",
+        "bitwarden_collection_id": null,
+        "bitwarden_item_id": "{{bitwarden_item_id_input}}",
+        "url_parameter_key": null,
+        "bitwarden_client_id_aws_secret_key": "SKYVERN_BITWARDEN_CLIENT_ID",
+        "bitwarden_client_secret_aws_secret_key": "SKYVERN_BITWARDEN_CLIENT_SECRET",
+        "bitwarden_master_password_aws_secret_key": "SKYVERN_BITWARDEN_MASTER_PASSWORD"
+      }
+    ],
+    "blocks": [
+      {
+        "label": "Login_Step",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "next_block_label": null,
+        "ignore_workflow_system_prompt": false,
+        "block_type": "task",
+        "title": "Login_Step",
+        "url": "{{website_url}}",
+        "navigation_goal": "1. MAIN GOAL:\nYour goal is to log in to the welcomebeds.com portal AND then complete the linked Ávoris back-office handshake, ending on the Ávoris 'Reservations and budgets finder' page (the booking search page reached via the 'Bookings' link in the account menu) that is completely free of any overlay covering the page content. Reaching the welcomebeds.com dashboard/home page alone is NOT the finish line for this task -- it is only the first half. Closing overlays and completing the Ávoris back-office handshake (section 2f below) are not optional exceptions -- they are part of the main goal and the task is not finished until both are done.\n\n2. GUARDRAILS/DETAILS:\n\n2a. Consent: If a cookie/consent banner appears, select \"Accept All\" (or the closest equivalent affirmative action).\n- If UI controls for \"Remember me\" or similar appear, check/confirm them.\n- If a \"Service Agreement\", \"Terms of Use\", \"Privacy Policy\" or similar consent prompt appears, accept/confirm it.\n\n2b. Login Flow (welcomebeds.com): First check if the user is already logged in. If so, skip directly to the MANDATORY OVERLAY CHECK below. Otherwise locate the username and password fields and input the credentials.\n- Conditional Logic: If an 'Agent Code' field is present and 'agent_code' is not empty, enter it before clicking the Login/Sign-in button.\n- CAPTCHA Handling: If a CAPTCHA challenge appears (e.g. an \"I'm not a robot\" / reCAPTCHA or hCaptcha checkbox, a slide/drag verification puzzle, an image or text verification, or a Cloudflare-style challenge), treat it as a normal part of the login flow, not as an automatic blocker. Attempt to resolve it -- click the checkbox or interact with the control as appropriate -- and wait for it to clear before submitting the form. The mere presence of a CAPTCHA is never by itself a reason to terminate, and you must never conclude that a CAPTCHA \"cannot be automated\" without first attempting to interact with it. However, do not get stuck in a loop: make at most 3 resolution attempts in total. If after 3 attempts the CAPTCHA still reappears or still blocks form submission, stop retrying and terminate, stating that the CAPTCHA could not be cleared -- do not keep alternating between solving the CAPTCHA and clicking the Login button beyond that limit.\n- Multi-Step Login: Some portals show a second login form immediately after you submit credentials, instead of navigating to the dashboard (the form may have different heading text, e.g. a \"Welcome to...\" message instead of \"Log in to...\"). If this happens, treat it as an expected intermediate step, not a failure: re-enter the username and password into the new form's fields and click the Login/Sign-in button again. Repeat this at most 2 times in a row before treating it as a genuine failure.\n- Transient Loading State: After clicking the Login/Sign-in button, the page may briefly show a \"Loading\", \"Working on it...\", spinner, or similar processing indicator. Wait for it to fully resolve before judging the outcome -- never conclude success or failure while a transient loading/processing message is still visible.\n- Transient \"Account Disabled\" Message: If a message such as \"Your account is disabled for security purpose\" (or a similarly worded temporary/security error) appears, do not immediately terminate. First verify that the username and password fields are filled with the provided credentials -- this message can appear as a false positive when the Login button is clicked with empty or not-yet-filled fields. Fill in the credentials correctly and click Login again. Only terminate due to this message if it still appears after retrying at least once with correctly-filled credentials.\n\n2c. Recognizing a Successful welcomebeds.com Login: many portals redirect after login to a page that looks nearly identical to the public marketing/search homepage (same hero banner, same search widgets) rather than a distinct admin-style dashboard. Do NOT conclude the login failed just because the post-login page resembles the pre-login homepage. Instead, treat the login as successful if the login form/fields are no longer present AND at least one of these signals is visible: (a) a username, account name, initials, or avatar now appears in the header/top navigation where a \"Login\"/\"Sign in\" control used to be; (b) an \"Account\", \"Profile\", \"My Bookings\", \"Logout\"/\"Sign out\" menu is now present; (c) the page content is personalized (e.g. recommendations or bookings based on past activity); (d) the URL has moved away from the login/sign-in path and no login form or error message is present. If any of these hold, proceed directly to the MANDATORY OVERLAY CHECK below instead of searching for a dashboard or re-attempting login.\n\n2d. MANDATORY POST-LOGIN OVERLAY CHECK: After the dashboard/home page starts loading, wait briefly for it to render, then scan the entire viewport for ANY element sitting on top of the page content -- this includes (but is not limited to) promotional banners, \"what's new\" or feature-announcement cards, newsletter/survey pop-ups, onboarding tours or tooltips, an OPEN/EXPANDED chat panel or window, and any modal dialog. Treat any element that visually covers or dims the underlying page as an overlay that must be closed, even if you don't recognize its purpose or can't fully read its text.\n- Chat-launcher exception: a small, fixed chat/support icon or button anchored in a corner of the screen (e.g. a round bubble, an avatar icon, or a \"Chat with us\" tab) that is minimized/collapsed and does NOT cover, dim, or overlap any page content is normal persistent UI chrome, not an overlay. Do not attempt to close, hide, click, or otherwise interact with it, and do not count it toward the overlay-dismissal attempt limit. Only treat a chat element as an overlay if it is already expanded into a panel/window that visibly covers page content -- in that case close it like any other overlay.\n- Closing overlays: look for a small \"X\"/close icon (commonly top-right corner of the card or modal), or a \"Close\", \"Skip\", \"No thanks\", \"Maybe later\", or \"Dismiss\" button. If none of those is present, try clicking the dimmed background area outside the modal, or pressing Escape. After closing one overlay, re-scan the page again -- closing one overlay (e.g. a cookie banner) can reveal another one behind it (e.g. a promo banner). Repeat this close-and-recheck cycle up to 3 times. This cycle applies only to actual overlays -- do not include a minimized chat-launcher icon in this scan or in the attempt count.\n- Do not click any link or button inside a promotional/marketing overlay other than its close/dismiss control -- your only goal with these overlays is to get rid of them, not to interact with their content.\n\n2e. Reaching the account menu: once welcomebeds.com is authenticated and overlay-free, click the small ROUND account/profile icon in the very top-right corner of the page -- a plain person-silhouette glyph with NO text label and NO dropdown chevron of its own. It sits immediately to the RIGHT of the \"English v\" language selector.\n- IMPORTANT -- do NOT click the language selector. If clicking opens a list of language names (English, Español, Português, Français, Italiano, ...), you clicked the WRONG element: close that list and click further right, on the round person-icon, instead.\n- Confirm the correct dropdown opened: it shows an account number, an agency name, and the links \"Invoicing\", \"Bookings\", \"Sign Out\". If you instead see a language list, or nothing changed, retry -- do not proceed until this exact dropdown is visible.\n\n2f. AVORIS BACK-OFFICE SSO HANDSHAKE (mandatory second half of this task -- read carefully, this is the part that was missing before and caused every downstream bot to see a login page):\nIn the account dropdown, click \"Bookings\". This navigates to a second, different domain -- the Ávoris back office (its pages show an \"ÁVORIS\" logo). Wait for it to load, then look at what is shown:\n- CASE A -- no login form: the page directly shows the \"Reservations and budgets finder\" search page (a \"Booking reference\" field and a \"SEARCH\" button). The Ávoris session was already established for this browser -- the handshake is done. Go straight to the COMPLETE condition below.\n- CASE B -- an \"Agencies access\" login form is shown (a \"travelplan | welcomebeds.com\" branded page with \"User\" and \"Password\" fields and a \"To access\" button): this is expected the FIRST time this browser reaches Ávoris, and is a normal, one-time step -- it is NOT an authentication failure and NOT a reason to terminate. Enter the SAME credentials used for welcomebeds.com ({{supplier_credentials.username}} into User, {{supplier_credentials.password}} into Password) and click \"To access\".\n  - Submitting this form is expected to redirect you BACK to welcomebeds.com (its homepage or a similar page) -- this bounce back is normal and expected, not an error.\n  - Once back on welcomebeds.com, repeat step 2e (open the account dropdown via the round profile icon, being careful not to hit the language selector) and click \"Bookings\" again. This second attempt should land directly on the Ávoris \"Reservations and budgets finder\" page WITHOUT any login form -- the Ávoris session is now established for this browser and will be captured when this profile/session is saved.\n- BOUNCE-LOOP PROTECTION (hard limit -- do not exceed): attempt the \"click Bookings -> handle Ávoris login if shown -> click Bookings again\" cycle described above at most 2 full times in total. If, after 2 complete cycles, you are still being shown the Ávoris \"Agencies access\" login form, or you are still bouncing between welcomebeds.com and Ávoris without ever reaching the Ávoris search page free of a login form, STOP -- do not keep clicking Bookings or resubmitting the form indefinitely. Terminate instead, per the TERMINATE condition below.\n\n3. PAYLOAD:\n- Username: {{supplier_credentials.username}}\n- Password: {{supplier_credentials.password}}\n- Agent Code: {{agent_code}}\n(The same Username/Password are used for both the welcomebeds.com login in step 2b and the Ávoris \"Agencies access\" login in step 2f -- do not look for separate Ávoris-specific credentials.)\n\n4. COMPLETION/TERMINATION CRITERIA:\n- COMPLETE when: the Ávoris \"Reservations and budgets finder\" page is visible (a \"Booking reference\" search field and a \"SEARCH\" button are present, and/or the page's own branding shows \"ÁVORIS\"), NEITHER the welcomebeds.com login form NOR the Ávoris \"Agencies access\" login form is visible, AND no cookie/consent banner, promotional pop-up, onboarding tooltip, open chat panel, or any other overlay is covering the page on either domain.\n- TERMINATE if: the welcomebeds.com credentials are rejected (an invalid username/password/account error persists after re-entering the credentials and retrying login at least once), OR the SAME credentials are rejected on the Ávoris \"Agencies access\" form after retrying once, OR a CAPTCHA still blocks login after 3 resolution attempts, OR a login form is gone but a blocking overlay that covers page content is still visible after 3 dismissal attempts, OR the bounce-loop protection limit in section 2f is reached (2 full cycles) without ever landing on the Ávoris search page free of a login form. Do not terminate merely because the post-login welcomebeds page resembles the public homepage, an overlay is present, a CAPTCHA has appeared, a transient error/loading message is present, or the Ávoris login form appears on the FIRST attempt (that specific case is expected, not a failure -- handle it per section 2f instead of terminating). An un-closable minimized chat-launcher icon is not grounds for termination.",
+        "data_extraction_goal": "",
+        "complete_criterion": "The Ávoris 'Reservations and budgets finder' page is visible (a 'Booking reference' search field with a 'SEARCH' button, and/or 'ÁVORIS' branding, is present). Neither the welcomebeds.com login form nor the Ávoris 'Agencies access' login form (User/Password/'To access') is visible. No overlay, banner, tooltip, or modal is covering the page content on either domain (a minimized chat-launcher icon does not count as an overlay).",
+        "terminate_criterion": "Login credentials were rejected on the welcomebeds.com login form or on the Ávoris 'Agencies access' form (invalid username/password or account error, persisting after one retry with correctly-filled credentials), or a blocking overlay could not be dismissed after multiple attempts while the target page remains inaccessible, or the agent has completed 2 full 'click Bookings -> handle Ávoris login if shown -> click Bookings again' cycles and still has not reached the Ávoris 'Reservations and budgets finder' page without a login form.",
+        "data_schema": null,
+        "error_code_mapping": {
+          "auth_rejected": "Login credentials were rejected on either the welcomebeds.com login form or the Ávoris 'Agencies access' form",
+          "overlay_blocking": "A blocking overlay/modal could not be dismissed after multiple attempts and the target page stayed inaccessible",
+          "sso_handshake_failed": "The agent bounced between welcomebeds.com and the Ávoris back office through 2 full cycles without ever reaching the Ávoris booking search page free of a login form"
+        },
+        "max_retries": 0,
+        "max_steps_per_run": 22,
+        "complete_on_download": false,
+        "download_suffix": null,
+        "parameter_keys": [],
+        "totp_identifier": null,
+        "totp_verification_url": null,
+        "disable_cache": false,
+        "include_action_history_in_verification": true,
+        "engine": "skyvern-2.0"
+      }
+    ],
+    "finally_block_label": null,
+    "workflow_system_prompt": null
+  },
+  "is_saved_task": false,
+  "status": "published",
+  "run_with": "agent",
+  "adaptive_caching": false,
+  "code_version": 2,
+  "cache_key": "default",
+  "ai_fallback": true,
+  "enable_self_healing": false,
+  "run_sequentially": false
+}
