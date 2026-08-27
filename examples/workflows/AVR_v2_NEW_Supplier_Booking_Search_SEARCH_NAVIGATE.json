@@ -1,6 +1,6 @@
 {
-  "title": "Welcomebeds -> Ávoris Booking Voucher Download & Parse",
-  "description": "Starting from the Welcomebeds.com account menu, opens the Ávoris back office, finds a booking by its locator, downloads its hotel voucher PDF, and parses it into structured booking details.",
+  "title": "(AVR v2) NEW Supplier Booking Search SEARCH_NAVIGATE",
+  "description": "Starting from the Welcomebeds.com account menu, opens the Ávoris back office, finds a booking by its locator, downloads its hotel voucher PDF, and parses it into structured booking details. v2: splits the single monolithic navigation into a verified checkpoint block plus a download block, and disambiguates the account-icon click that was previously confused with the language selector.",
   "proxy_location": "RESIDENTIAL",
   "webhook_callback_url": "",
   "persist_browser_session": false,
@@ -8,7 +8,7 @@
   "browser_profile_id": null,
   "browser_profile_key": null,
   "model": {
-    "name": "openai/gemini-2.5-flash-lite"
+    "name": "openai/gemini-3.5-flash-lite"
   },
   "totp_verification_url": null,
   "max_screenshot_scrolls": null,
@@ -34,27 +34,51 @@
     ],
     "blocks": [
       {
+        "label": "Open_Booking_Documents",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "next_block_label": "Download_Voucher",
+        "ignore_workflow_system_prompt": true,
+        "block_type": "navigation",
+        "url": "{{website_url}}",
+        "title": "Open_Booking_Documents",
+        "navigation_goal": "*** OBJECTIVE: starting from the Welcomebeds.com homepage, reach the 'DOCUMENTATION / ATTACHMENTS' tab of the Ávoris booking detail page for booking reference '{{booking_id}}' ***\n\n1. On the homepage, in the very top-right corner, click the small ROUND account/profile icon — a plain person-silhouette glyph with NO text label and NO dropdown chevron of its own. It sits immediately to the RIGHT of the 'English ⌄' language selector.\n   - IMPORTANT — do NOT click the language selector. If clicking opens a list of language names (English, Español, Português, Français, Italiano, ...), you clicked the WRONG element: close that list and click further right, on the round person-icon, instead.\n2. Confirm the correct dropdown opened: it shows an account number, an agency name, and the links 'Invoicing', 'Bookings', 'Sign Out'. If you instead see a language list, or nothing changed, retry step 1 — do not proceed until this exact dropdown is visible.\n3. In that dropdown, click 'Bookings'. This opens the Ávoris back office 'Bookings and budgets' tool, possibly in a new tab — if a new tab opens, switch to it and continue there.\n4. On the 'Reservations and budgets finder' page, click into the 'Booking reference' input (the first field in the filter form, top-left) and type '{{booking_id}}' into it. Leave every other filter field untouched.\n5. Click the dark blue 'SEARCH' button at the bottom-right of the filter form.\n6. Wait for the 'Search Result' table to appear below the form. Find the row whose 'LOCATOR' column equals '{{booking_id}}'.\n7. In that row, click the 'Open reservation' icon — a small box-with-arrow icon at the right end of the row. Do not click the copy icon next to it.\n8. The booking detail page opens with a green bar reading 'BOOKING LOCATOR: {{booking_id}}' at the top, and a tab strip below it (GENERAL INFORMATION, DETAIL OF SERVICES, PASSENGER DETAILS, DETAIL OF AMOUNTS, PAYMENT MANAGEMENT, DOCUMENTATION / ATTACHMENTS, CLAIMS). Click the 'DOCUMENTATION / ATTACHMENTS' tab.\n9. Confirm that tab is open: it shows three buttons ('Journey information', 'Proforma invoice', 'Generate voucher') above a 'DOCUMENTS' table.\n\nIf a cookie-consent banner or modal covers the page at any point, dismiss it and carry on. If any click in this sequence lands somewhere unexpected (wrong menu, wrong tab, an error toast), do not treat that as final — re-orient from what is actually on screen and retry the step that went wrong instead of continuing forward from the wrong page.\n\n### COMPLETE when\nThe green 'BOOKING LOCATOR: {{booking_id}}' bar AND the 'DOCUMENTATION / ATTACHMENTS' tab's 'DOCUMENTS' table (with a visible 'Generate voucher' button) are both visible on the page at the same time.\n\n### TERMINATE if\n- A login or sign-in form asking for both a username AND a password is displayed on welcomebeds.com or the Ávoris back office: the browser session is not authenticated. Do not attempt to log in yourself.\n- After clicking SEARCH, the Search Result table is visible but contains no row whose LOCATOR equals '{{booking_id}}'.",
+        "complete_criterion": "The green 'BOOKING LOCATOR: {{booking_id}}' bar is visible AND the 'DOCUMENTATION / ATTACHMENTS' tab is the active tab, showing a 'DOCUMENTS' table and a 'Generate voucher' button.",
+        "terminate_criterion": "A login form with both a username field and a password field is visible on the current page, OR the Ávoris 'Search Result' table is visible with no row whose LOCATOR column equals '{{booking_id}}'.",
+        "error_code_mapping": {
+          "not_authenticated": "A login or sign-in form was displayed on welcomebeds.com or the Ávoris back office instead of the expected page, meaning the browser session is not logged in",
+          "booking_not_found": "Filtering the Ávoris finder by the booking reference returned no matching row in the Search Result table, so the booking does not exist or is not visible to this account"
+        },
+        "max_retries": 1,
+        "max_steps_per_run": 16,
+        "parameter_keys": [
+          "booking_id",
+          "website_url"
+        ],
+        "totp_identifier": null,
+        "totp_verification_url": null,
+        "disable_cache": false,
+        "engine": "skyvern-2.0",
+        "complete_verification": true
+      },
+      {
         "label": "Download_Voucher",
         "continue_on_failure": false,
         "next_loop_on_failure": false,
         "next_block_label": "Extract_Data",
         "ignore_workflow_system_prompt": true,
         "block_type": "file_download",
-        "url": "{{website_url}}",
+        "url": null,
         "title": "Download_Voucher",
-        "navigation_goal": "*** OBJECTIVE: starting from the Welcomebeds.com homepage, reach the Ávoris back office and download the hotel voucher PDF for booking reference '{{booking_id}}' ***\n\n1. On the homepage, click the small circular account/profile icon in the top-right corner (next to the language selector).\n2. In the dropdown that opens (it shows the account number and agency name), click 'Bookings'. This opens the Ávoris back office 'Bookings and budgets' tool, possibly in a new tab — if a new tab opens, switch to it and continue there.\n3. On the 'Reservations and budgets finder' page, click into the 'Booking reference' input (the first field in the filter form, top-left) and type '{{booking_id}}' into it. Leave every other filter field untouched.\n4. Click the dark blue 'SEARCH' button at the bottom-right of the filter form.\n5. Wait for the 'Search Result' table to appear below the form. Find the row whose 'LOCATOR' column equals '{{booking_id}}'.\n6. In that row, click the 'Open reservation' icon — a small box-with-arrow icon at the right end of the row. Do not click the copy icon next to it.\n7. The booking detail page opens with a green bar reading 'BOOKING LOCATOR: {{booking_id}}' at the top, and a tab strip below it (GENERAL INFORMATION, DETAIL OF SERVICES, PASSENGER DETAILS, DETAIL OF AMOUNTS, PAYMENT MANAGEMENT, DOCUMENTATION / ATTACHMENTS, CLAIMS). Click the 'DOCUMENTATION / ATTACHMENTS' tab.\n8. That tab shows three buttons ('Journey information', 'Proforma invoice', 'Generate voucher') above a 'DOCUMENTS' table. Look at the 'Type' column of the DOCUMENTS table:\n   - If a row with Type 'Voucher' already exists, do NOT click 'Generate voucher' — skip straight to step 9.\n   - If no row with Type 'Voucher' exists yet, click 'Generate voucher' and wait for the DOCUMENTS table to refresh and show a new row with Type 'Voucher'.\n9. In the DOCUMENTS table, in the row with Type 'Voucher' (its Name is usually 'Travel documentation'), click the download icon in the Actions column — the down-arrow-into-tray icon. Do not click the magnifying-glass 'view' icon next to it.\n\n### WHAT SUCCESS LOOKS LIKE\nThe voucher is a PDF file. This browser is configured to save PDFs to disk instead of displaying them, so clicking the download icon starts a download rather than opening a readable page. A blank tab, a newly opened empty tab, or a download indicator IS the successful outcome — the block finishes on its own as soon as the file is saved.\n- Do NOT wait for voucher details to render on screen, and do NOT treat a blank page as a failure.\n- Do NOT click the download icon a second time; a repeat click only produces a duplicate file.\n- If a cookie-consent banner or modal covers the page at any point, dismiss it and carry on.\n\n### TERMINATE\n- TERMINATE if a login or sign-in page asking for a username/password is displayed on either welcomebeds.com or the Ávoris back office: the browser session is not authenticated. Do not attempt to log in yourself.\n- TERMINATE if, after clicking SEARCH, the Search Result table shows no row whose LOCATOR equals '{{booking_id}}'.",
+        "navigation_goal": "*** OBJECTIVE: on the already-open 'DOCUMENTATION / ATTACHMENTS' tab of the Ávoris booking detail page, obtain and download the voucher PDF ***\n\n1. Look at the 'Type' column of the 'DOCUMENTS' table on this tab.\n   - If a row with Type 'Voucher' already exists, do NOT click 'Generate voucher' — skip straight to step 2.\n   - If no row with Type 'Voucher' exists yet, click the 'Generate voucher' button and wait for the DOCUMENTS table to refresh and show a new row with Type 'Voucher'.\n2. In the DOCUMENTS table, in the row with Type 'Voucher' (its Name is usually 'Travel documentation'), click the download icon in the Actions column — the down-arrow-into-tray icon. Do not click the magnifying-glass 'view' icon next to it.\n\n### WHAT SUCCESS LOOKS LIKE\nThe voucher is a PDF file. This browser is configured to save PDFs to disk instead of displaying them, so clicking the download icon starts a download rather than opening a readable page. A blank tab, a newly opened empty tab, or a download indicator IS the successful outcome — the block finishes on its own as soon as the file is saved.\n- Do NOT wait for voucher details to render on screen, and do NOT treat a blank page as a failure.\n- Do NOT click the download icon a second time; a repeat click only produces a duplicate file.\n- If a cookie-consent banner or modal covers the page at any point, dismiss it and carry on.\n\n### TERMINATE\n- TERMINATE if the page currently on screen is not the 'DOCUMENTATION / ATTACHMENTS' tab described above (e.g. a login form, or an unrelated tab/page) — this block assumes the previous block already reached that tab, and does not attempt to navigate there itself.\n- TERMINATE if clicking 'Generate voucher' produces an error message and no 'Voucher' row ever appears in the DOCUMENTS table.",
         "error_code_mapping": {
-          "not_authenticated": "A login or sign-in form was displayed on welcomebeds.com or the Ávoris back office instead of the expected page, meaning the browser session is not logged in",
-          "booking_not_found": "Filtering the Ávoris finder by the booking reference returned no matching row in the Search Result table, so the booking does not exist or is not visible to this account",
-          "voucher_not_available": "The booking detail page was reached but no 'Voucher' document could be generated or downloaded from the DOCUMENTATION / ATTACHMENTS tab"
+          "wrong_page": "The page on screen is not the DOCUMENTATION / ATTACHMENTS tab of the booking detail page, so the preceding navigation block did not actually reach it",
+          "voucher_not_available": "The DOCUMENTATION / ATTACHMENTS tab was reached but no 'Voucher' document could be generated or downloaded"
         },
         "max_retries": 1,
-        "max_steps_per_run": 16,
+        "max_steps_per_run": 8,
         "download_suffix": "voucher.pdf",
-        "parameter_keys": [
-          "booking_id",
-          "website_url"
-        ],
+        "parameter_keys": [],
         "totp_identifier": null,
         "totp_verification_url": null,
         "disable_cache": false,
@@ -264,7 +288,7 @@
   "adaptive_caching": false,
   "code_version": 2,
   "cache_key": "default",
-  "ai_fallback": false,
-  "enable_self_healing": false,
+  "ai_fallback": true,
+  "enable_self_healing": true,
   "run_sequentially": false
 }
