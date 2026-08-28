@@ -1,0 +1,345 @@
+{
+  "title": "(Holiday) Reservation Summary Search & Parse",
+  "description": "Starting from the 'Holiday' agent back-office homepage, opens Reservations > Overview, filters by booking ID, downloads the 'Reservation Details #Reseller' PDF (a 'Reservation summary' document) for that booking, and parses it into structured booking details. Modeled on the (AVR v9) Welcomebeds/Avoris supplier-booking-search workflow: a navigation checkpoint block reaches the download trigger, a file_download block performs the download, a file_url_parser block extracts the schema, and a code block normalizes the output shape. v1.",
+  "proxy_location": "RESIDENTIAL",
+  "webhook_callback_url": "",
+  "persist_browser_session": false,
+  "pin_saved_session_ip": false,
+  "browser_profile_id": null,
+  "browser_profile_key": null,
+  "model": {
+    "name": "openai/gemini-3.5-flash-lite"
+  },
+  "totp_verification_url": null,
+  "max_screenshot_scrolls": null,
+  "max_elapsed_time_minutes": null,
+  "extra_http_headers": {},
+  "workflow_definition": {
+    "version": 2,
+    "parameters": [
+      {
+        "key": "booking_id",
+        "description": "The Holiday reservation ID to look up (the value shown in the 'ID' column, e.g. '235116'). Typed into the 'ID' filter field on the Reservations > Overview page.",
+        "parameter_type": "workflow",
+        "workflow_parameter_type": "string",
+        "default_value": null
+      },
+      {
+        "key": "website_url",
+        "description": "The Holiday portal homepage URL to start the run from.",
+        "parameter_type": "workflow",
+        "workflow_parameter_type": "string",
+        "default_value": null
+      }
+    ],
+    "blocks": [
+      {
+        "label": "Open_Reservation_Document_Menu",
+        "block_type": "navigation",
+        "next_block_label": "Download_Reservation_Summary",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "ignore_workflow_system_prompt": true,
+        "url": "{{website_url}}",
+        "title": "Open Reservation Document Menu",
+        "navigation_goal": "*** OBJECTIVE: starting from the Holiday portal homepage, reach the point where the 'Reservation details #{{booking_id}}' document-choice popover is open for reservation '{{booking_id}}' ***\n\n1. On the homepage, click 'Reservations' in the top navigation bar (it sits between 'Search' and 'Financial', and has a small folder icon). This opens a dropdown with exactly two items: 'Overview' (folder icon) and 'Accommodations' (bed icon).\n   - IMPORTANT: do not click 'Accommodations' — that is a different section of the portal. Click 'Overview'.\n2. Confirm you landed on the 'Reservations / Overview' page: a tab strip reading 'All Reservations', 'Future Reservations', 'Past Reservations', 'Today Reservations', 'Archive' is visible (with 'All Reservations' active by default), and directly below it a gold/yellow filter bar with the fields 'Agent', 'Service', 'Status', 'ID', 'Service date', then a red 'Reset' button and a black 'Filter' button.\n3. Click into the 'ID' field in that filter bar (placeholder text 'Internal ID', the 4th field) and type '{{booking_id}}' into it. Leave every other filter field ('Agent', 'Service', 'Status', 'Service date') untouched — do not select anything in the 'Service' or 'Status' dropdowns.\n4. Click the black 'Filter' button at the right end of the filter bar. Do not click the red 'Reset' button.\n5. Wait for the results table below the filter bar to refresh. Find the row whose 'ID' column reads '#{{booking_id}}'.\n   - If the table shows zero rows, or no row's ID matches '{{booking_id}}', do not proceed further — this is a failure case handled by TERMINATE below.\n6. In that matching row, click the small PDF/document icon positioned immediately to the right of the hotel-name link in the 'Service' column.\n   - IMPORTANT — do NOT click the gear/settings icon at the far right end of the row (a different row-actions menu), and do NOT click the 'V' voucher-status button in the 'Vch.' column — both are unrelated controls on the same row. The correct icon is the small PDF-page glyph right next to the hotel name text.\n7. A small popover titled 'Reservation details #{{booking_id}}' opens over the table, listing exactly two clickable rows: '1. Reservation Details #Reseller' and '2. Reservation Details #Customer'. Do NOT click either option — stop here. Selecting one of them is the job of the next step in this workflow, not this one.\n\nIf a cookie-consent banner or any other modal covers the page at any point, dismiss it and continue. If any click in this sequence lands somewhere unexpected (wrong menu, wrong page, an error toast, the popover not appearing), do not treat that as final — re-orient from what is actually on screen and retry the step that went wrong instead of continuing forward from the wrong page.\n\n### COMPLETE when\nThe popover titled 'Reservation details #{{booking_id}}' is visible on screen, showing both the 'Reservation Details #Reseller' and 'Reservation Details #Customer' options.\n\n### TERMINATE if\n- A login or sign-in form is displayed instead of the Holiday portal: the browser session is not authenticated. Do not attempt to log in yourself.\n- After clicking 'Filter', the results table is visible but contains no row whose ID equals '{{booking_id}}'.",
+        "complete_criterion": "A popover titled 'Reservation details #{{booking_id}}' is visible, listing both 'Reservation Details #Reseller' and 'Reservation Details #Customer' as clickable options.",
+        "terminate_criterion": "A login/sign-in form is shown instead of the Holiday portal, or the filtered results table has no row matching ID '{{booking_id}}'.",
+        "error_code_mapping": {
+          "not_authenticated": "A login or sign-in form is displayed — the browser session is not authenticated",
+          "booking_not_found": "The results table after filtering by ID contains no row matching '{{booking_id}}'"
+        },
+        "max_retries": 1,
+        "max_steps_per_run": 14,
+        "parameter_keys": ["booking_id"],
+        "totp_identifier": null,
+        "totp_verification_url": null,
+        "disable_cache": false,
+        "complete_verification": true
+      },
+      {
+        "label": "Download_Reservation_Summary",
+        "block_type": "file_download",
+        "next_block_label": "Extract_Data",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "ignore_workflow_system_prompt": true,
+        "url": "",
+        "title": "Download Reservation Summary",
+        "navigation_goal": "*** OBJECTIVE: on the already-open 'Reservation details #{{booking_id}}' popover, download the reseller's reservation-summary PDF ***\n\n1. In the open popover, click the first option, '1. Reservation Details #Reseller'.\n   - IMPORTANT — do NOT click '2. Reservation Details #Customer': that produces a different, customer-facing document, not the one this workflow needs.\n2. That click downloads a PDF (a 'Reservation summary' document, e.g. named like 'reservation_{{booking_id}}.pdf').\n\n### WHAT SUCCESS LOOKS LIKE\nThis browser is configured to save PDFs to disk instead of displaying them, so clicking 'Reservation Details #Reseller' starts a download rather than opening a readable page. An unchanged background page, the popover closing, or a download indicator IS the successful outcome — the block finishes on its own as soon as the file is saved.\n- Do NOT wait for the PDF to render on screen, and do NOT treat an unchanged page as a failure.\n- Do NOT click 'Reservation Details #Reseller' a second time; a repeat click only produces a duplicate file.\n- If a cookie-consent banner or modal covers the page at any point, dismiss it and continue.\n\n### TERMINATE\n- TERMINATE if the popover titled 'Reservation details #{{booking_id}}' with both 'Reservation Details #Reseller' and 'Reservation Details #Customer' options is not visible on screen (e.g. a login form, or an unrelated page) — this block assumes the previous block already opened it, and does not attempt to reopen it itself.\n- TERMINATE if clicking 'Reservation Details #Reseller' produces an error message and no download ever starts.",
+        "error_code_mapping": {
+          "wrong_page": "The 'Reservation details' popover with the Reseller/Customer options is not open, so the preceding navigation block did not actually reach it",
+          "download_not_available": "The popover was open but clicking 'Reservation Details #Reseller' produced an error and no file was downloaded"
+        },
+        "max_retries": 1,
+        "max_steps_per_run": 6,
+        "download_suffix": "reservation_summary.pdf",
+        "parameter_keys": ["booking_id"],
+        "totp_identifier": null,
+        "totp_verification_url": null,
+        "disable_cache": false,
+        "engine": "skyvern-2.0",
+        "download_timeout": null
+      },
+      {
+        "label": "Extract_Data",
+        "block_type": "file_url_parser",
+        "next_block_label": "Standardize_Output",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "ignore_workflow_system_prompt": false,
+        "file_url": "Download_Reservation_Summary_output",
+        "file_type": "pdf",
+        "json_schema": {
+          "properties": {
+            "extracted_information": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "description": "The booking details read from the 'Reservation summary' PDF, as an array containing exactly one object. Always return exactly one item here, never zero and never more than one.",
+              "items": {
+                "properties": {
+                  "hotelName": {
+                    "type": "string",
+                    "description": "Name of the hotel. Source: the 'Hotel:' line (e.g. 'Hotel: EXE BUDAPEST CENTER' -> 'EXE BUDAPEST CENTER'). This document has only one hotel-name field — never take it from the 'Reseller:' line, which names the reselling agency, not the hotel.",
+                    "title": "Hotel Name"
+                  },
+                  "address": {
+                    "type": "string",
+                    "description": "Full street address of the hotel. Source: the 'Address:' line, directly under the 'Hotel:' line (street, number, postal code, city, region, country). Copy verbatim, including any repeated city name.",
+                    "title": "Address"
+                  },
+                  "checkinDate": {
+                    "type": "string",
+                    "description": "Check-in date as ISO-8601 (YYYY-MM-DD). Source: the 'CHECK-IN:' line. Dates in this document are already printed in ISO-8601 YYYY-MM-DD format (e.g. 'CHECK-IN: 2026-10-15') — copy the value as-is, no reformatting needed. Never use 'Res. date:' — that is the date the reservation was booked, not the stay date.",
+                    "title": "Check-in Date"
+                  },
+                  "checkoutDate": {
+                    "type": "string",
+                    "description": "Check-out date as ISO-8601 (YYYY-MM-DD). Source: the 'CHECK-OUT:' line, already in YYYY-MM-DD format (e.g. 'CHECK-OUT: 2026-10-26') — copy as-is. Never use 'Res. date:'.",
+                    "title": "Check-out Date"
+                  },
+                  "adultCount": {
+                    "type": "integer",
+                    "description": "Number of ADULT guests. Source: the 'Adults x N' part of the 'Pax:' line (e.g. 'Pax: Adults x 1, Chd: 2' -> 1). Never derive this by counting names — this document only ever prints the leading passenger's name, not one row per guest.",
+                    "title": "Adult Count"
+                  },
+                  "guestNames": {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Guest name(s). This document only ever names the lead guest, on the 'Leading passeger:' line (note: printed with that spelling in the source document) — output a single-element array containing that name verbatim (e.g. ['HRAYR MINASYAN']). Output null if that line is absent or blank.",
+                    "title": "Guest Names"
+                  },
+                  "childrenCount": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Number of CHILD guests. Source: the 'Chd: N' part of the 'Pax:' line (e.g. 'Pax: Adults x 1, Chd: 2' -> 2). Output null whenever that part reads '0' or is absent — never output 0.",
+                    "title": "Children Count"
+                  },
+                  "supplierHotelName": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "A second, supplier-side hotel name shown separately from hotelName, kept for schema compatibility with other suppliers' vouchers. This document only ever prints one 'Hotel:' field, so there is nothing to compare against — always output null here.",
+                    "title": "Supplier Hotel Name"
+                  },
+                  "roomCategory": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Room type. Source: the 'Rooms:' line, which has the shape '<count> X <room type>, <board basis>' (e.g. 'Rooms: 1 X Room With Extra Bed, Bed and Breakfast'). Strip the leading '<count> X ' token, then take the text up to (not including) the following comma, verbatim (e.g. 'Room With Extra Bed'). If multiple room entries are listed (separated by ' + ' or a line break), extract each one's room-type portion the same way and join the distinct values with '; '. Output null if the 'Rooms:' line is empty.",
+                    "title": "Room Category"
+                  },
+                  "mealPlan": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Meal / board plan. Source: the same 'Rooms:' line as roomCategory — the text after the first comma (e.g. 'Rooms: 1 X Room With Extra Bed, Bed and Breakfast' -> 'Bed and Breakfast'), copied verbatim. If multiple room entries are listed, join the distinct values with '; '. Output null if the 'Rooms:' line is empty or carries no board-basis text after the comma.",
+                    "title": "Meal Plan"
+                  },
+                  "bedType": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Bed configuration (e.g. Double, Twin, King), filled ONLY when the document states it explicitly in its own field. Never infer it from the room-type text in 'Rooms:'. This document template does not carry a dedicated bed-type field, so this will always be null.",
+                    "title": "Bed Type"
+                  },
+                  "phone": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Hotel phone number. This document template does not print a hotel phone number anywhere (no 'Phone:' field exists in it) — always output null.",
+                    "title": "Phone"
+                  },
+                  "ibn": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Internal Booking Number — the definitive booking locator for this reservation. Source: the 'Reservation No.:' line at the top of the document (e.g. 'Reservation No.: 235116' -> '235116'). Output null if that line is absent.",
+                    "title": "Internal Booking Number (IBN)"
+                  },
+                  "hcn": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "Hotel Confirmation Number. This document template has no dedicated HCN field anywhere on the page — always output null. Never fall back to ibn or to any other numeric value as a substitute.",
+                    "title": "Hotel Confirmation Number (HCN)"
+                  },
+                  "reservationDate": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "The date the reservation was made, as ISO-8601 (YYYY-MM-DD). Source: the 'Res. date:' line at the top of the document (e.g. 'Res. date: 2026-06-24 09:05:04' -> '2026-06-24'); take only the date portion before the time-of-day, already in YYYY-MM-DD format. Output null if that line is absent.",
+                    "title": "Reservation Date"
+                  },
+                  "reseller": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "The reselling agency/platform for this booking. Source: the 'Reseller:' line (e.g. 'Reseller: Ratehawk' -> 'Ratehawk'), copied verbatim. Output null if that line is absent.",
+                    "title": "Reseller"
+                  },
+                  "sellingPriceAmount": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "The numeric amount from the 'Selling price:' line, excluding the currency code (e.g. 'Selling price: 2177.55 USD' -> 2177.55). Output null if that line is absent.",
+                    "title": "Selling Price Amount"
+                  },
+                  "sellingPriceCurrency": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "description": "The 3-letter currency code from the 'Selling price:' line (e.g. 'Selling price: 2177.55 USD' -> 'USD'), copied verbatim. Output null if that line is absent.",
+                    "title": "Selling Price Currency"
+                  }
+                },
+                "required": [
+                  "hotelName",
+                  "address",
+                  "checkinDate",
+                  "checkoutDate",
+                  "adultCount"
+                ],
+                "title": "ReservationSummaryDetails",
+                "type": "object",
+                "description": "One booking's details read from the Holiday portal's 'Reservation summary' PDF."
+              }
+            }
+          },
+          "required": [
+            "extracted_information"
+          ],
+          "title": "ReservationSummaryExtraction",
+          "type": "object"
+        }
+      },
+      {
+        "label": "Standardize_Output",
+        "block_type": "code",
+        "next_block_label": null,
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "ignore_workflow_system_prompt": false,
+        "code": "booking = {{ Extract_Data.extracted_information }}\nif not isinstance(booking, list):\n    booking = [booking] if booking else []\nreturn {\"parsed_booking\": booking}",
+        "parameter_keys": [],
+        "prompt": null,
+        "steps": null
+      }
+    ],
+    "finally_block_label": null,
+    "workflow_system_prompt": "You are parsing a hotel-reservation 'Reservation summary' PDF issued by the Holiday travel-agent back-office portal to a corporate reseller ('Ratehawk'). The text you receive is the literal text layer of that PDF.\n\n### DOCUMENT LAYOUT\nUnlike some suppliers' vouchers, this document is a single flat page of plain 'Label: value' lines — there is no duplicated CLIENT DOCUMENTATION / HOTEL VOUCHER pair, no two-column AGENCY DETAILS / BOOKING DETAILS boxes, no CUSTOMER DETAILS table, and no Rooms table with TYPE/ARRIVAL/DEPARTURE/BOARD BASIS columns. Its fields, top to bottom, are:\n- 'Reservation summary' heading, then 'Res. date:' (when the booking was made) and 'Reservation No.:' (this reservation's own locator).\n- 'Reseller:' — the reselling agency's name (e.g. 'Ratehawk'). This is NOT the hotel name.\n- 'Leading passeger:' — the lead guest's name (the only guest name this template ever prints).\n- 'Rooms:' — a single line combining room count, room type, and board basis (e.g. '1 X Room With Extra Bed, Bed and Breakfast').\n- 'Pax:' — adult and children counts (e.g. 'Adults x 1, Chd: 2').\n- 'CHECK-IN:' / 'CHECK-OUT:' — the stay dates, already in ISO-8601 YYYY-MM-DD format.\n- 'Hotel:' and 'Address:' — the hotel's name and full address.\n- 'Selling price:' — a numeric amount followed by a 3-letter currency code.\n- A 'Note:' disclaimer stating this is a reservation summary, not a voucher, and that the booking can be canceled without amending the document — this is boilerplate, not an extraction target.\n\n### RULES\n1. Never invent a value. If a field is not literally present in the text, output null. Only hotelName, address, checkinDate, checkoutDate and adultCount are mandatory.\n2. Dates in this document are already ISO-8601 YYYY-MM-DD (unlike some other suppliers' DD/MM/YY voucher formats) — copy checkinDate/checkoutDate/reservationDate as printed, taking only the date portion where a line also carries a time-of-day (e.g. 'Res. date:').\n3. Never substitute one field for another: 'Reseller:' names the agency, never the hotel; 'Res. date:' is when the booking was made, never a stay date; 'Reservation No.:' is this booking's own locator (ibn) and must never be confused with any other value on the page.\n4. Several fields in the shared schema (bedType, hcn, phone, supplierHotelName) simply do not exist in this document template — outputting null for them is the expected, correct result, not a sign of a missed field.\n5. Copy text values verbatim: keep the original spelling, casing and punctuation (including the source document's own typo 'passeger'). Do not translate, do not expand abbreviations, do not tidy up."
+  },
+  "is_saved_task": false,
+  "status": "published",
+  "run_with": "agent",
+  "adaptive_caching": false,
+  "code_version": 2,
+  "cache_key": "default",
+  "ai_fallback": true,
+  "enable_self_healing": true,
+  "run_sequentially": false
+}
