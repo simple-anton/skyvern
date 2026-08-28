@@ -97,12 +97,12 @@
         "json_schema": {
           "properties": {
             "extracted_information": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "description": "The booking details read from the voucher PDF, as an array containing exactly one object. Always return exactly one item here, never zero and never more than one.",
+              "items": {
               "properties": {
-                "bookingReference": {
-                  "type": "string",
-                  "description": "The booking reference / locator printed at the top-right of the page, directly under the 'CLIENT DOCUMENTATION' or 'HOTEL VOUCHER' heading (e.g. '803166953'). This is the definitive booking locator. Never take it from the 'Reference:' row inside AGENCY DETAILS (that is a separate agency-side UUID reference — see agencyReference), and never from the Booking holder or HCN rows.",
-                  "title": "Booking Reference"
-                },
                 "hotelName": {
                   "type": "string",
                   "description": "Name of the hotel. Source: the 'Hotel:' line inside the 'ACCOMMODATION' section (e.g. 'Hotel: The Royal National Hotel | Nights: : 6' -> 'The Royal National Hotel'). The same name is usually repeated in the 'BOOKING DETAILS' box's own 'Hotel:' row (top-right of the page); if the two differ, prefer the ACCOMMODATION section's value here and put the BOOKING DETAILS value in supplierHotelName. Never take a name from the AGENCY DETAILS box or from the page footer.",
@@ -128,33 +128,6 @@
                   "description": "Number of ADULT guests. Source: the 'Adults:' field inside the 'BOOKING DETAILS' box (e.g. 'Adults: 2'). Never derive this by counting rows in the CUSTOMER DETAILS table — that table has no Pax Type or age-category column, so it cannot reliably distinguish adults from children.",
                   "title": "Adult Count"
                 },
-                "childrenCount": {
-                  "anyOf": [
-                    {"type": "integer"},
-                    {"type": "null"}
-                  ],
-                  "default": null,
-                  "description": "Number of CHILD guests. Source: the 'Children:' field inside the BOOKING DETAILS box. Output null whenever that field reads '0' or is blank — never output 0.",
-                  "title": "Children Count"
-                },
-                "infantCount": {
-                  "anyOf": [
-                    {"type": "integer"},
-                    {"type": "null"}
-                  ],
-                  "default": null,
-                  "description": "Number of INFANT guests. Source: the 'Infants:' field inside the BOOKING DETAILS box. Output null whenever that field reads '0' or is blank — never output 0.",
-                  "title": "Infant Count"
-                },
-                "nights": {
-                  "anyOf": [
-                    {"type": "integer"},
-                    {"type": "null"}
-                  ],
-                  "default": null,
-                  "description": "Number of nights, from the 'Nights:' field in the BOOKING DETAILS box (e.g. '6'). Output null if that field is empty.",
-                  "title": "Nights"
-                },
                 "guestNames": {
                   "anyOf": [
                     {
@@ -167,6 +140,15 @@
                   "description": "Guest names from the 'CUSTOMER DETAILS' table, one entry per row, taken verbatim from the 'Name' column (ignore the 'Age' column). Include every row with a name, adults and children alike. Output null if the table has no rows.",
                   "title": "Guest Names"
                 },
+                "childrenCount": {
+                  "anyOf": [
+                    {"type": "integer"},
+                    {"type": "null"}
+                  ],
+                  "default": null,
+                  "description": "Number of CHILD guests. Source: the 'Children:' field inside the BOOKING DETAILS box. Output null whenever that field reads '0' or is blank — never output 0.",
+                  "title": "Children Count"
+                },
                 "supplierHotelName": {
                   "anyOf": [
                     {"type": "string"},
@@ -175,15 +157,6 @@
                   "default": null,
                   "description": "The hotel name as shown in the 'BOOKING DETAILS' box's own 'Hotel:' row (top-right of the page), filled ONLY when it differs from the hotelName extracted from the ACCOMMODATION section. Output null when the two match, or when the BOOKING DETAILS box has no Hotel row — never repeat the value of hotelName here.",
                   "title": "Supplier Hotel Name"
-                },
-                "hotelCategory": {
-                  "anyOf": [
-                    {"type": "string"},
-                    {"type": "null"}
-                  ],
-                  "default": null,
-                  "description": "Hotel star rating, from the 'Category:' line inside the ACCOMMODATION section (e.g. 'Hotel 3 Stars'), copied verbatim. Output null if absent.",
-                  "title": "Hotel Category"
                 },
                 "roomCategory": {
                   "anyOf": [
@@ -221,32 +194,14 @@
                   "description": "Hotel phone number, digits only. Source: the 'Phone' field inside the ACCOMMODATION section (e.g. 'GB 2076372488'). That value is a two-letter country marker followed by a local number, not a numeric calling code — strip the leading letters and every non-digit character, keeping only the digit run (e.g. 'GB 2076372488' -> '2076372488'). Never use the AGENCY DETAILS 'Phone number:' field or the '24-hour customer service' footer number — those belong to the agency, not the hotel. Output null if the ACCOMMODATION section carries no phone.",
                   "title": "Phone"
                 },
-                "email": {
+                "ibn": {
                   "anyOf": [
                     {"type": "string"},
                     {"type": "null"}
                   ],
                   "default": null,
-                  "description": "Hotel email address, from the 'Email:' field inside the ACCOMMODATION section (next to Phone). Never use the AGENCY DETAILS 'Email:' field (e.g. 'support@emergingtravel.com') — that is the agency's email. Output null if the ACCOMMODATION section carries no email.",
-                  "title": "Email"
-                },
-                "bookingHolder": {
-                  "anyOf": [
-                    {"type": "string"},
-                    {"type": "null"}
-                  ],
-                  "default": null,
-                  "description": "Name of the booking holder, from the 'Booking holder:' field inside the BOOKING DETAILS box. This may differ from the first name in guestNames. Output null if absent.",
-                  "title": "Booking Holder"
-                },
-                "agencyReference": {
-                  "anyOf": [
-                    {"type": "string"},
-                    {"type": "null"}
-                  ],
-                  "default": null,
-                  "description": "The travel agency's own internal reference for this booking, from the 'Reference:' field inside the AGENCY DETAILS box (a UUID-like value, e.g. 'fbdc0380-178e-488a-ad6a-436f261602e8/7f8116'). Never confuse this with bookingReference (the locator printed at the top of the page) or with hcn. Output null if absent.",
-                  "title": "Agency Reference"
+                  "description": "Internal Booking Number — the definitive booking locator, printed at the top-right of the page directly under the 'CLIENT DOCUMENTATION' or 'HOTEL VOUCHER' heading (e.g. '803166953'). Never take it from the AGENCY DETAILS 'Reference:' row (a different, UUID-style agency reference, e.g. 'fbdc0380-178e-488a-ad6a-436f261602e8/7f8116') and never from the 'Agent:' row (the agency's own account number, e.g. '5123022687') — both belong to the agency, not to this booking's own locator. Output null if no such locator is printed on the page.",
+                  "title": "Internal Booking Number (IBN)"
                 },
                 "hcn": {
                   "anyOf": [
@@ -254,12 +209,11 @@
                     {"type": "null"}
                   ],
                   "default": null,
-                  "description": "Hotel Confirmation Number, from the 'HCN:' row inside the BOOKING DETAILS box. In this template that row is usually blank — output null whenever it is empty, and never fall back to bookingReference or agencyReference.",
+                  "description": "Hotel Confirmation Number, from the 'HCN:' row inside the BOOKING DETAILS box ONLY. In this template that row is normally blank — output null whenever it is empty. Never use the AGENCY DETAILS 'Agent:' row's account number (e.g. '5123022687') as HCN just because it is a similar-length numeric string — that is the agency's own account id, not a hotel confirmation. Never fall back to ibn or to the AGENCY DETAILS 'Reference:' value either.",
                   "title": "Hotel Confirmation Number (HCN)"
                 }
               },
               "required": [
-                "bookingReference",
                 "hotelName",
                 "address",
                 "checkinDate",
@@ -268,7 +222,8 @@
               ],
               "title": "BookingDetails",
               "type": "object",
-              "description": "The booking details read from the voucher PDF, as one single object. Always return exactly one object here, never an array and never null."
+              "description": "One booking's details read from the voucher PDF."
+              }
             }
           },
           "required": [
@@ -280,7 +235,7 @@
       }
     ],
     "finally_block_label": null,
-    "workflow_system_prompt": "You are parsing a hotel-booking voucher PDF issued by a B2B travel platform (Welcomebeds/Ávoris) to a corporate travel agency ('EMERGING TRAVEL'). The text you receive is the literal text layer of that PDF.\n\n### DOCUMENT LAYOUT\nThe PDF contains two near-duplicate copies of the same booking, one headed 'CLIENT DOCUMENTATION' and one headed 'HOTEL VOUCHER' (typically pages 1-2 and 3-4). Both carry identical data — read whichever copy has the field you need; if they ever disagree, prefer the first ('CLIENT DOCUMENTATION') copy.\n\nEach copy has this structure, top to bottom:\n- Header row: document title on the left, 'Booking reference' label with the locator value on the right; below that, 'Booking date:' and 'Notification date:' (administrative dates — never the stay dates).\n- Two-column box: 'AGENCY DETAILS' on the left (Agency, Agent, Address, Phone number, Email, Reference — all belong to the reseller agency, NEVER to the hotel) and 'BOOKING DETAILS' on the right (Hotel, Booking holder, Check-in date, Return date, Nights, Adults, Children, Infants, HCN).\n- 'CUSTOMER DETAILS' table: Name / Age columns, one row per guest.\n- 'ACCOMMODATION' section: a 'Hotel: <name> | Nights: <n>' line, a 'Category:' line (star rating), the hotel's own Address / Phone / Email, and a 'Rooms:' table with columns TYPE / ARRIVAL / DEPARTURE / BOARD BASIS / ADULTS / CHILDREN / INFANTS.\n- Footer: a 24-hour service phone line, a 'CANCELLATION FEES' table, and 'GENERAL COMMENTS' policy boilerplate — none of these are extraction targets.\n\n### RULES\n1. Read every page; a page that only repeats the other copy, or only carries the cancellation/comments footer, is normal and not an error.\n2. Never invent a value. If a field is not literally present in the text, output null. Only bookingReference, hotelName, address, checkinDate, checkoutDate and adultCount are mandatory.\n3. Dates in this document are DD/MM/YY (not the weekday-prefixed format some other suppliers use). Convert to ISO-8601 YYYY-MM-DD, treating the two-digit year as 20YY (e.g. '20/10/26' -> '2026-10-20').\n4. Never substitute one field for another: the AGENCY DETAILS box and the ACCOMMODATION section each have their own Address/Phone/Email — hotel-facing fields (hotelName, address, phone, email) must come from ACCOMMODATION, never from AGENCY DETAILS, and vice versa for anything agency-related (agencyReference).\n5. Copy text values verbatim: keep the original spelling, casing and punctuation. Do not translate, do not expand abbreviations, do not tidy up."
+    "workflow_system_prompt": "You are parsing a hotel-booking voucher PDF issued by a B2B travel platform (Welcomebeds/Ávoris) to a corporate travel agency ('EMERGING TRAVEL'). The text you receive is the literal text layer of that PDF.\n\n### DOCUMENT LAYOUT\nThe PDF contains two near-duplicate copies of the same booking, one headed 'CLIENT DOCUMENTATION' and one headed 'HOTEL VOUCHER' (typically pages 1-2 and 3-4). Both carry identical data — read whichever copy has the field you need; if they ever disagree, prefer the first ('CLIENT DOCUMENTATION') copy.\n\nEach copy has this structure, top to bottom:\n- Header row: document title on the left, 'Booking reference' label with the locator value on the right; below that, 'Booking date:' and 'Notification date:' (administrative dates — never the stay dates).\n- Two-column box: 'AGENCY DETAILS' on the left (Agency, Agent, Address, Phone number, Email, Reference — all belong to the reseller agency, NEVER to the hotel) and 'BOOKING DETAILS' on the right (Hotel, Booking holder, Check-in date, Return date, Nights, Adults, Children, Infants, HCN).\n- 'CUSTOMER DETAILS' table: Name / Age columns, one row per guest.\n- 'ACCOMMODATION' section: a 'Hotel: <name> | Nights: <n>' line, a 'Category:' line (star rating), the hotel's own Address / Phone / Email, and a 'Rooms:' table with columns TYPE / ARRIVAL / DEPARTURE / BOARD BASIS / ADULTS / CHILDREN / INFANTS.\n- Footer: a 24-hour service phone line, a 'CANCELLATION FEES' table, and 'GENERAL COMMENTS' policy boilerplate — none of these are extraction targets.\n\n### RULES\n1. Read every page; a page that only repeats the other copy, or only carries the cancellation/comments footer, is normal and not an error.\n2. Never invent a value. If a field is not literally present in the text, output null. Only hotelName, address, checkinDate, checkoutDate and adultCount are mandatory.\n3. Dates in this document are DD/MM/YY (not the weekday-prefixed format some other suppliers use). Convert to ISO-8601 YYYY-MM-DD, treating the two-digit year as 20YY (e.g. '20/10/26' -> '2026-10-20').\n4. Never substitute one field for another: the AGENCY DETAILS box (Agency, Agent, Address, Phone number, Email, Reference) belongs entirely to the reseller agency and is NEVER a source for hotelName, address, phone, ibn or hcn — those come only from the ACCOMMODATION section (hotelName, address, phone) or the BOOKING DETAILS box (ibn's locator, hcn). In particular, never mistake the AGENCY DETAILS 'Agent:' account number or 'Reference:' UUID for ibn or hcn just because they are numeric/alphanumeric strings of similar shape.\n5. Copy text values verbatim: keep the original spelling, casing and punctuation. Do not translate, do not expand abbreviations, do not tidy up."
   },
   "is_saved_task": false,
   "status": "published",
