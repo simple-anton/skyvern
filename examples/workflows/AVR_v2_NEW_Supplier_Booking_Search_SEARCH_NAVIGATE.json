@@ -240,7 +240,7 @@
         "next_block_label": null,
         "ignore_workflow_system_prompt": false,
         "block_type": "code",
-        "code": "booking = {{ Extract_Data.extracted_information }}\nif not isinstance(booking, list):\n    booking = [booking] if booking else []\nreturn {\"extracted_information\": booking}",
+        "code": "booking = {{ Extract_Data.extracted_information }}\nif not isinstance(booking, list):\n    booking = [booking] if booking else []\nreturn {\"parsed_booking\": booking}",
         "parameter_keys": []
       }
     ],
