@@ -1,5 +1,5 @@
-title: (BAB v_2) NEW Supplier Booking Search SEARCH_NAVIGATE
-description: 'Starting from the ''Holiday'' agent back-office homepage, opens Reservations > Overview, filters by booking ID, downloads the ''Reservation Details #Reseller'' PDF (a ''Reservation summary'' document) for that booking, and parses it into structured booking details. Modeled on the (AVR v9) Welcomebeds/Avoris supplier-booking-search workflow: a task_v2 checkpoint block reaches the download trigger, a file_download block performs the download, a file_url_parser block extracts the schema, and a code block normalizes the output shape. v_1: initial version, built on the current navigation/file_download block types. v_2: switched the Open_Reservation_Document_Menu checkpoint block from navigation (engine field has no effect there) to task_v2, the only block_type that actually runs the Skyvern 2.0 planner-agent-validator engine — at the cost of losing that block''s code-caching (task_v2''s cached run_signature just re-invokes the live engine every run).'
+title: (BAB v_3) NEW Supplier Booking Search SEARCH_NAVIGATE
+description: 'Starting from the ''Holiday'' agent back-office homepage, opens Reservations > Overview, filters by booking ID, downloads the ''Reservation Details #Reseller'' PDF (a ''Reservation summary'' document) for that booking, and parses it into structured booking details. Modeled on the (AVR v9) Welcomebeds/Avoris supplier-booking-search workflow: a Browser Task checkpoint block (Find_Booking) reaches the download trigger, a file_download block performs the download, a file_url_parser block extracts the schema, and a code block normalizes the output shape. v_1: initial version, built on the navigation/file_download block types. v_2: switched the checkpoint block to task_v2 to actually run the Skyvern 2.0 engine (navigation''s engine field is a no-op). v_3: rebuilt the checkpoint block as Find_Booking, block_type ''task'' (the UI''s unified ''Browser Task'' node) with engine ''skyvern-2.0'' and typed complete_criterion/terminate_criterion/error_code_mapping/parameter_keys restored — this is the block_type the current editor actually emits for a Browser Task node regardless of engine choice, and unlike task_v2 it keeps working code-caching support.'
 proxy_location: RESIDENTIAL
 webhook_callback_url: ''
 persist_browser_session: false
@@ -26,14 +26,16 @@ workflow_definition:
     workflow_parameter_type: string
     default_value: null
   blocks:
-  - label: Open_Reservation_Document_Menu
-    block_type: task_v2
+  - label: Find_Booking
+    block_type: task
     next_block_label: Download_Reservation_Summary
     continue_on_failure: false
     next_loop_on_failure: false
     ignore_workflow_system_prompt: true
     url: '{{website_url}}'
-    prompt: |-
+    title: Find Booking
+    engine: skyvern-2.0
+    navigation_goal: |-
       *** OBJECTIVE: starting from the Holiday portal homepage, reach the point where the 'Reservation details #{{booking_id}}' document-choice popover is open for reservation '{{booking_id}}' ***
 
       1. On the homepage, click 'Reservations' in the top navigation bar (it sits between 'Search' and 'Financial', and has a small folder icon). This opens a dropdown with exactly two items: 'Overview' (folder icon) and 'Accommodations' (bed icon).
@@ -48,20 +50,19 @@ workflow_definition:
       7. A small popover titled 'Reservation details #{{booking_id}}' opens over the table, listing exactly two clickable rows: '1. Reservation Details #Reseller' and '2. Reservation Details #Customer'. Do NOT click either option — stop here. Selecting one of them is the job of the next step in this workflow, not this one.
 
       If a cookie-consent banner or any other modal covers the page at any point, dismiss it and continue. If any click in this sequence lands somewhere unexpected (wrong menu, wrong page, an error toast, the popover not appearing), do not treat that as final — re-orient from what is actually on screen and retry the step that went wrong instead of continuing forward from the wrong page.
-
-      ### COMPLETE when
-      The popover titled 'Reservation details #{{booking_id}}' is visible on screen, showing both the 'Reservation Details #Reseller' and 'Reservation Details #Customer' options.
-
-      ### TERMINATE if
-      - A login or sign-in form is displayed instead of the Holiday portal: the browser session is not authenticated. Do not attempt to log in yourself.
-      - After clicking 'Filter', the results table is visible but contains no row whose ID equals '{{booking_id}}'.
-
-      ### NO DELIVERABLE
-      This block is a pure navigation checkpoint — there is no report, summary, or structured deliverable for this goal beyond reaching the page/popover described above. When you finish and produce your final answer, its "output" field MUST be null. Do not report the booking reference, the popover state, the list of visible options, a status field, or any other page state there — none of that is what this goal asks for, and the next block already reads the page for what it needs.
-    max_steps: 16
+    complete_criterion: 'The popover titled ''Reservation details #{{booking_id}}'' is visible on screen, showing both the ''Reservation Details #Reseller'' and ''Reservation Details #Customer'' options.'
+    terminate_criterion: A login or sign-in form is displayed instead of the Holiday portal (session not authenticated), or after clicking 'Filter' the results table is visible but contains no row whose ID equals '{{booking_id}}'.
+    error_code_mapping:
+      not_authenticated: A login or sign-in form is displayed — the browser session is not authenticated
+      booking_not_found: The results table after filtering by ID contains no row matching '{{booking_id}}'
+    max_retries: 1
+    max_steps_per_run: 16
+    parameter_keys:
+    - booking_id
     totp_identifier: null
     totp_verification_url: null
     disable_cache: false
+    complete_verification: true
   - label: Download_Reservation_Summary
     block_type: file_download
     next_block_label: Extract_Data
