@@ -89,7 +89,7 @@
         "label": "Extract_Data",
         "continue_on_failure": false,
         "next_loop_on_failure": false,
-        "next_block_label": null,
+        "next_block_label": "Standardize_Output",
         "ignore_workflow_system_prompt": false,
         "block_type": "file_url_parser",
         "file_url": "Download_Voucher_output",
@@ -232,6 +232,16 @@
           "title": "VoucherExtraction",
           "type": "object"
         }
+      },
+      {
+        "label": "Standardize_Output",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "next_block_label": null,
+        "ignore_workflow_system_prompt": false,
+        "block_type": "code",
+        "code": "booking = {{ Extract_Data.extracted_information }}\nif not isinstance(booking, list):\n    booking = [booking] if booking else []\nreturn {\"extracted_information\": booking}",
+        "parameter_keys": []
       }
     ],
     "finally_block_label": null,
