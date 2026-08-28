@@ -1,5 +1,5 @@
-title: (BAB v_3) NEW Supplier Booking Search SEARCH_NAVIGATE
-description: 'Starting from the ''Holiday'' agent back-office homepage, opens Reservations > Overview, filters by booking ID, downloads the ''Reservation Details #Reseller'' PDF (a ''Reservation summary'' document) for that booking, and parses it into structured booking details. Modeled on the (AVR v9) Welcomebeds/Avoris supplier-booking-search workflow: a Browser Task checkpoint block (Find_Booking) reaches the download trigger, a file_download block performs the download, a file_url_parser block extracts the schema, and a code block normalizes the output shape. v_1: initial version, built on the navigation/file_download block types. v_2: switched the checkpoint block to task_v2 to actually run the Skyvern 2.0 engine (navigation''s engine field is a no-op). v_3: rebuilt the checkpoint block as Find_Booking, block_type ''task'' (the UI''s unified ''Browser Task'' node) with engine ''skyvern-2.0'' and typed complete_criterion/terminate_criterion/error_code_mapping/parameter_keys restored — this is the block_type the current editor actually emits for a Browser Task node regardless of engine choice, and unlike task_v2 it keeps working code-caching support.'
+title: (BAB v_4) NEW Supplier Booking Search SEARCH_NAVIGATE
+description: 'Starting from wherever the shared browser session already is (ideally the already-authenticated Holiday portal homepage handed off by the login bot), opens Reservations > Overview, filters by booking ID, downloads the ''Reservation Details #Reseller'' PDF (a ''Reservation summary'' document) for that booking, and parses it into structured booking details. Modeled on the (AVR v9) Welcomebeds/Avoris supplier-booking-search workflow: a Browser Task checkpoint block (Find_Booking) reaches the download trigger, a file_download block performs the download, a file_url_parser block extracts the schema, and a code block normalizes the output shape. v_1: initial version, built on the navigation/file_download block types. v_2: switched the checkpoint block to task_v2 to actually run the Skyvern 2.0 engine (navigation''s engine field is a no-op). v_3: rebuilt the checkpoint block as Find_Booking, block_type ''task'' (the UI''s unified ''Browser Task'' node) with engine ''skyvern-2.0'' and typed complete_criterion/terminate_criterion/error_code_mapping/parameter_keys restored. v_4: cleared Find_Booking''s ''url'' field (was forcing a fresh top-level navigate_to_url on every run, even when reusing an already-authenticated browser_session_id) — this portal''s session apparently does not survive a hard reload to the homepage (client-side/short-lived auth state), so the block now continues on the current page when it''s already the authenticated portal, and only navigates to {{website_url}} when it isn''t.'
 proxy_location: RESIDENTIAL
 webhook_callback_url: ''
 persist_browser_session: false
@@ -32,12 +32,15 @@ workflow_definition:
     continue_on_failure: false
     next_loop_on_failure: false
     ignore_workflow_system_prompt: true
-    url: '{{website_url}}'
+    url: ''
     title: Find Booking
     engine: skyvern-2.0
     navigation_goal: |-
-      *** OBJECTIVE: starting from the Holiday portal homepage, reach the point where the 'Reservation details #{{booking_id}}' document-choice popover is open for reservation '{{booking_id}}' ***
+      *** OBJECTIVE: reach the point where the 'Reservation details #{{booking_id}}' document-choice popover is open for reservation '{{booking_id}}' ***
 
+      0. This block continues on whatever page the browser is already showing (it does not force a fresh navigation) — the browser session may already be sitting on the authenticated Holiday portal homepage from a prior login step. First check what is currently on screen:
+         - If it is already the Holiday portal homepage (or another authenticated Holiday portal page), do NOT reload or re-navigate to '{{website_url}}' — reloading a working authenticated page can needlessly discard client-side session state on this portal. Proceed directly to step 1 from the current page.
+         - If the browser is on a blank page, a different site, or anything that is not the Holiday portal, navigate to '{{website_url}}' once, then proceed to step 1.
       1. On the homepage, click 'Reservations' in the top navigation bar (it sits between 'Search' and 'Financial', and has a small folder icon). This opens a dropdown with exactly two items: 'Overview' (folder icon) and 'Accommodations' (bed icon).
          - IMPORTANT: do not click 'Accommodations' — that is a different section of the portal. Click 'Overview'.
       2. Confirm you landed on the 'Reservations / Overview' page: a tab strip reading 'All Reservations', 'Future Reservations', 'Past Reservations', 'Today Reservations', 'Archive' is visible (with 'All Reservations' active by default), and directly below it a gold/yellow filter bar with the fields 'Agent', 'Service', 'Status', 'ID', 'Service date', then a red 'Reset' button and a black 'Filter' button.
@@ -51,7 +54,7 @@ workflow_definition:
 
       If a cookie-consent banner or any other modal covers the page at any point, dismiss it and continue. If any click in this sequence lands somewhere unexpected (wrong menu, wrong page, an error toast, the popover not appearing), do not treat that as final — re-orient from what is actually on screen and retry the step that went wrong instead of continuing forward from the wrong page.
     complete_criterion: 'The popover titled ''Reservation details #{{booking_id}}'' is visible on screen, showing both the ''Reservation Details #Reseller'' and ''Reservation Details #Customer'' options.'
-    terminate_criterion: A login or sign-in form is displayed instead of the Holiday portal (session not authenticated), or after clicking 'Filter' the results table is visible but contains no row whose ID equals '{{booking_id}}'.
+    terminate_criterion: A login or sign-in form is displayed instead of the Holiday portal — this means the browser session was not authenticated (or its authenticated state did not survive), not that the workflow itself did anything wrong — or after clicking 'Filter' the results table is visible but contains no row whose ID equals '{{booking_id}}'.
     error_code_mapping:
       not_authenticated: A login or sign-in form is displayed — the browser session is not authenticated
       booking_not_found: The results table after filtering by ID contains no row matching '{{booking_id}}'
