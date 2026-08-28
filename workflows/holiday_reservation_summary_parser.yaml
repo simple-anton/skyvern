@@ -1,5 +1,5 @@
-title: (BAB v_4) NEW Supplier Booking Search SEARCH_NAVIGATE
-description: 'Starting from wherever the shared browser session already is (ideally the already-authenticated Holiday portal homepage handed off by the login bot), opens Reservations > Overview, filters by booking ID, downloads the ''Reservation Details #Reseller'' PDF (a ''Reservation summary'' document) for that booking, and parses it into structured booking details. Modeled on the (AVR v9) Welcomebeds/Avoris supplier-booking-search workflow: a Browser Task checkpoint block (Find_Booking) reaches the download trigger, a file_download block performs the download, a file_url_parser block extracts the schema, and a code block normalizes the output shape. v_1: initial version, built on the navigation/file_download block types. v_2: switched the checkpoint block to task_v2 to actually run the Skyvern 2.0 engine (navigation''s engine field is a no-op). v_3: rebuilt the checkpoint block as Find_Booking, block_type ''task'' (the UI''s unified ''Browser Task'' node) with engine ''skyvern-2.0'' and typed complete_criterion/terminate_criterion/error_code_mapping/parameter_keys restored. v_4: cleared Find_Booking''s ''url'' field (was forcing a fresh top-level navigate_to_url on every run, even when reusing an already-authenticated browser_session_id) — this portal''s session apparently does not survive a hard reload to the homepage (client-side/short-lived auth state), so the block now continues on the current page when it''s already the authenticated portal, and only navigates to {{website_url}} when it isn''t.'
+title: (BAB v_5) NEW Supplier Booking Search SEARCH_NAVIGATE
+description: 'Starting from wherever the shared browser session already is (ideally the already-authenticated Holiday portal homepage handed off by the login bot), opens Reservations > Overview, filters by booking ID, downloads the ''Reservation Details #Reseller'' PDF (a ''Reservation summary'' document) for that booking, and parses it into structured booking details. Modeled on the (AVR v9) Welcomebeds/Avoris supplier-booking-search workflow: a Browser Task checkpoint block (Find_Booking) reaches the download trigger, a file_download block performs the download, a file_url_parser block extracts the schema, and a code block normalizes the output shape. v_1: initial version, built on the navigation/file_download block types. v_2: switched the checkpoint block to task_v2 to actually run the Skyvern 2.0 engine (navigation''s engine field is a no-op). v_3: rebuilt the checkpoint block as Find_Booking, block_type ''task'' (the UI''s unified ''Browser Task'' node) with engine ''skyvern-2.0'' and typed complete_criterion/terminate_criterion/error_code_mapping/parameter_keys restored. v_4: cleared Find_Booking''s ''url'' field (was forcing a fresh top-level navigate_to_url on every run, even when reusing an already-authenticated browser_session_id) — this portal''s session apparently does not survive a hard reload to the homepage (client-side/short-lived auth state), so the block now continues on the current page when it''s already the authenticated portal, and only navigates to {{website_url}} when it isn''t. v_5: extraction schema pared back to the standard 14-field set shared across all supplier parsers (hotelName, address, checkinDate, checkoutDate, adultCount, guestNames, childrenCount, supplierHotelName, roomCategory, mealPlan, bedType, phone, ibn, hcn) — dropped reservationDate/reseller/sellingPriceAmount/sellingPriceCurrency, which weren''t part of that shared schema and never got flattened into the Jobs sheet columns anyway.'
 proxy_location: RESIDENTIAL
 webhook_callback_url: ''
 persist_browser_session: false
@@ -205,34 +205,6 @@ workflow_definition:
                 default: null
                 description: Hotel Confirmation Number. This document template has no dedicated HCN field anywhere on the page — always output null. Never fall back to ibn or to any other numeric value as a substitute.
                 title: Hotel Confirmation Number (HCN)
-              reservationDate:
-                anyOf:
-                - type: string
-                - type: 'null'
-                default: null
-                description: 'The date the reservation was made, as ISO-8601 (YYYY-MM-DD). Source: the ''Res. date:'' line at the top of the document (e.g. ''Res. date: 2026-06-24 09:05:04'' -> ''2026-06-24''); take only the date portion before the time-of-day, already in YYYY-MM-DD format. Output null if that line is absent.'
-                title: Reservation Date
-              reseller:
-                anyOf:
-                - type: string
-                - type: 'null'
-                default: null
-                description: 'The reselling agency/platform for this booking. Source: the ''Reseller:'' line (e.g. ''Reseller: Ratehawk'' -> ''Ratehawk''), copied verbatim. Output null if that line is absent.'
-                title: Reseller
-              sellingPriceAmount:
-                anyOf:
-                - type: number
-                - type: 'null'
-                default: null
-                description: 'The numeric amount from the ''Selling price:'' line, excluding the currency code (e.g. ''Selling price: 2177.55 USD'' -> 2177.55). Output null if that line is absent.'
-                title: Selling Price Amount
-              sellingPriceCurrency:
-                anyOf:
-                - type: string
-                - type: 'null'
-                default: null
-                description: 'The 3-letter currency code from the ''Selling price:'' line (e.g. ''Selling price: 2177.55 USD'' -> ''USD''), copied verbatim. Output null if that line is absent.'
-                title: Selling Price Currency
             required:
             - hotelName
             - address
@@ -278,7 +250,7 @@ workflow_definition:
 
     ### RULES
     1. Never invent a value. If a field is not literally present in the text, output null. Only hotelName, address, checkinDate, checkoutDate and adultCount are mandatory.
-    2. Dates in this document are already ISO-8601 YYYY-MM-DD (unlike some other suppliers' DD/MM/YY voucher formats) — copy checkinDate/checkoutDate/reservationDate as printed, taking only the date portion where a line also carries a time-of-day (e.g. 'Res. date:').
+    2. Dates in this document are already ISO-8601 YYYY-MM-DD (unlike some other suppliers' DD/MM/YY voucher formats) — copy checkinDate/checkoutDate as printed.
     3. Never substitute one field for another: 'Reseller:' names the agency, never the hotel; 'Res. date:' is when the booking was made, never a stay date; 'Reservation No.:' is this booking's own locator (ibn) and must never be confused with any other value on the page.
     4. Several fields in the shared schema (bedType, hcn, phone, supplierHotelName) simply do not exist in this document template — outputting null for them is the expected, correct result, not a sign of a missed field.
     5. Copy text values verbatim: keep the original spelling, casing and punctuation (including the source document's own typo 'passeger'). Do not translate, do not expand abbreviations, do not tidy up.
