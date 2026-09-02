@@ -1,0 +1,287 @@
+{
+  "title": "(BAB v_1) NEW Supplier Booking Search SEARCH_NAVIGATE",
+  "description": "Starting from wherever the shared browser session already is (ideally the already-authenticated Bingtrip merchant portal handed off by the login bot), switches the interface to English, opens Hotels > Orders > Booking Manage, CLEARS EVERY FILTER FIELD, filters by booking ID, reads the matching order row off the page, then downloads that order's 'download confirmation slip' PDF (a 'Voucher' document) and parses the remaining fields out of it. Modeled on the (BAB v_7) Holiday supplier-booking-search workflow and keeping its block shape: a Browser Task checkpoint block (Find_Booking) reaches and reads the filtered row, a file_download block performs the download, a file_url_parser block extracts the voucher fields, and a code block merges both stages into the shared 14-field booking schema. Two-stage by design: the voucher PDF prints each value as a single non-wrapping line and truncates anything too long, so the hotel name, room type, stay dates, guest names, IBN and HCN are taken from the portal table (which wraps and shows full text) and only the address, hotel phone, bed configuration and meal plan come from the PDF. Guest count is not published by this portal, so adultCount is derived from the number of names listed in the order row's 'Guest / Contact Person' cell, duplicates included. v_1: initial version.",
+  "proxy_location": "RESIDENTIAL",
+  "webhook_callback_url": "",
+  "persist_browser_session": false,
+  "pin_saved_session_ip": false,
+  "browser_profile_id": null,
+  "browser_profile_key": null,
+  "model": {
+    "name": "openai/gemini-3.5-flash-lite"
+  },
+  "totp_verification_url": null,
+  "max_screenshot_scrolls": null,
+  "max_elapsed_time_minutes": null,
+  "extra_http_headers": {},
+  "workflow_definition": {
+    "version": 2,
+    "parameters": [
+      {
+        "key": "booking_id",
+        "description": "The Bingtrip order to look up, typed into the 'Booking ID' filter on the Orders > Booking Manage page. That field accepts either identifier shown in the table's 'Booking ID / Platform Booking ID' column: the numeric Booking ID (e.g. '8260902055928430') or the long hexadecimal Platform Booking ID (e.g. '5e977b32aaddd27f0be39daf2d0b8430').",
+        "parameter_type": "workflow",
+        "workflow_parameter_type": "string",
+        "default_value": null
+      },
+      {
+        "key": "website_url",
+        "description": "The Bingtrip merchant portal homepage URL to start the run from.",
+        "parameter_type": "workflow",
+        "workflow_parameter_type": "string",
+        "default_value": null
+      }
+    ],
+    "blocks": [
+      {
+        "label": "Find_Booking",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "next_block_label": "Download_Voucher",
+        "ignore_workflow_system_prompt": true,
+        "block_type": "task",
+        "title": "Find_Booking",
+        "url": "",
+        "navigation_goal": "*** OBJECTIVE: reach the point where the Orders > Booking Manage results table is filtered down to the single order '{{booking_id}}' and its row (including the 'download confirmation slip' link) is on screen ***\n\n0. This block continues on whatever page the browser is already showing (it does not force a fresh navigation) — the browser session may already be sitting on the authenticated Bingtrip merchant portal from a prior login step. First check what is currently on screen:\n   - If it is already the Bingtrip merchant portal (the blue header with the 'bingtrip' logo, a globe icon, 'USD', a mail icon and the account name on the right, and a left sidebar with 'Hotels', 'Settlement', 'Developer', 'Authorization', 'Settings'), do NOT reload or re-navigate to '{{website_url}}' — reloading a working authenticated page can needlessly discard client-side session state on this portal. Proceed directly to step 1 from the current page.\n   - If the browser is on a blank page, a different site, or anything that is not the Bingtrip merchant portal, navigate to '{{website_url}}' once, then proceed to step 1.\n1. MAKE SURE THE INTERFACE LANGUAGE IS ENGLISH before doing anything else. This portal defaults to Chinese for its page content (e.g. the search form reads '目的地', '入住', '退房', and headings like '最近查看过的酒店'). If ANY Chinese text is visible in the main content area:\n   - Click the globe/language icon in the top blue header bar (it sits just to the right of the 'bingtrip' logo, separated by a thin vertical divider).\n   - A small dropdown opens with exactly three options: '简体中文', '繁體中文' and 'English' (each with a small flag). Click 'English'.\n   - Wait for the page to re-render in English, then continue.\n   - If the interface is already fully in English, skip this step — do not open the language menu at all.\n2. In the left sidebar, open 'Hotels' if its sub-menu is collapsed (it expands to 'Explore', 'My collection', 'Orders'), then click 'Orders'.\n   - IMPORTANT: click 'Orders', not 'Explore' and not 'My collection' — those are different sections.\n3. Confirm you landed on the Orders page: two tabs are shown near the top, 'Booking Manage' and 'Portal'. 'Booking Manage' must be the active tab — if 'Portal' is active instead, click 'Booking Manage'.\n   Below the tabs is a filter panel containing the fields 'Booking ID' (placeholder 'Booking ID/Platform Booking ID'), 'Hotel Name', 'Guest / Contact Person' (two boxes: 'Name' and 'Last Name'), 'Confirmation No', 'Order Status', 'Cost status', and 'Booking Date' (a 'Start date' → 'End date' range), plus a blue 'Search' button, a 'Reset' button and an 'expand' link.\n4. *** CLEAR EVERY FILTER FIELD FIRST — THIS IS MANDATORY. *** The portal remembers filter values between visits (for example a 'Booking Date' start date such as '2026-09-01 00:00:00' is often left over from a previous session), and any leftover value silently narrows the search so the booking is reported as not found.\n   - Click the 'Reset' button once and wait for the filter panel to re-render.\n   - Then VISUALLY VERIFY that every single filter input is now empty and shows only its grey placeholder text: 'Booking ID', 'Hotel Name', 'Name', 'Last Name', 'Confirmation No', 'Order Status', 'Cost status', and both halves of the 'Booking Date' range ('Start date' and 'End date').\n   - If ANY field still holds a value after Reset, clear that field by hand: click the small circled '⊗' clear icon that appears at the right edge of the field, or click into the field, select all of its text and delete it. Repeat until every field is empty.\n   - Note: the filter panel may also carry additional fields shown via the 'expand' link. Do not click 'expand' yourself, but if extra filter fields are already visible, they must be empty too — clear them the same way.\n5. Only once every filter field is confirmed empty, click into the 'Booking ID' field (the first field, placeholder 'Booking ID/Platform Booking ID') and type '{{booking_id}}' into it. Leave every other filter field empty — do not select anything in the 'Order Status' or 'Cost status' dropdowns and do not pick any 'Booking Date'.\n6. Click the blue 'Search' button. Do NOT click 'Reset' again at this point (that would wipe the Booking ID you just typed).\n7. Wait for the results table below to refresh. It should now contain exactly ONE order row, and the pager under the table should read 'Total 1 items'. The row's 'Booking ID / Platform Booking ID' cell holds two values on two lines: a numeric Booking ID on the first line and a long hexadecimal Platform Booking ID on the second — '{{booking_id}}' will match one of those two.\n   - If the table shows zero rows / a 'No data' placeholder, or no row matches '{{booking_id}}', do not proceed further — this is a failure case handled by TERMINATE below.\n   - If more than one row is returned, use only the row whose Booking ID or Platform Booking ID matches '{{booking_id}}' exactly.\n8. The results table is WIDER than the visible area and has its own horizontal scrollbar just below the row. Drag that horizontal scrollbar to the right (or scroll the table sideways) until the right-hand columns — 'Confirmation No', 'Total Price', 'Order Status / Cost status', 'Cancellation Policy', 'Order Source' and 'Action' — are visible, and the blue 'download confirmation slip' link in the 'Action' column of the matching row is on screen.\n   - Do NOT click 'download confirmation slip' in this block, and do NOT click the 'Export' button above the table — downloading is the job of the next step in this workflow, not this one.\n\nIf a cookie-consent banner, a notification popup or any other modal covers the page at any point, dismiss it and continue. If any click in this sequence lands somewhere unexpected (wrong menu, wrong tab, an error toast, the table not refreshing), do not treat that as final — re-orient from what is actually on screen and retry the step that went wrong instead of continuing forward from the wrong page.",
+        "data_extraction_goal": "Read the single order row currently shown in the Orders > Booking Manage results table (the row matching '{{booking_id}}') and return its values.\n\nThis page — not the downloadable voucher PDF — is the authoritative source for these particular fields, because the table cells wrap and show their full text, whereas the PDF prints each value as a single line that is cut off when it is too long.\n\nThe row's cells continue to the RIGHT beyond the visible area of the table; all of them belong to the same single row. The columns, left to right, are: 'Booking Date', 'Booking ID / Platform Booking ID', 'Hotel Name / Room Type', 'Check-In/Out / Room Night', 'Guest / Contact Person', 'Confirmation No', 'Total Price', 'Order Status / Cost status', 'Cancellation Policy', 'Order Source', 'Action'.\n\nRead exactly these values from that one row:\n- The numeric Booking ID (the FIRST line of the 'Booking ID / Platform Booking ID' cell, e.g. '8260902055928430') — not the long hexadecimal Platform Booking ID on the second line.\n- The hotel name (the FIRST line of the 'Hotel Name / Room Type' cell, e.g. 'Under Canvas Grand Canyon').\n- The room type (the SECOND line of that same cell, e.g. 'Suite with Kids Tent - Private Bath').\n- The check-in and check-out dates from the FIRST line of the 'Check-In/Out / Room Night' cell, printed as '<check-in> ~<check-out>' in YYYY-MM-DD form (e.g. '2026-09-19 ~2026-09-21').\n- The guest names from the FIRST line of the 'Guest / Contact Person' cell — a comma-separated list such as 'DeMeij/Daniel,DeMeij/Daniel,DeMeij/Daniel,DeMeij/Daniel'. The SECOND line of that cell is a telephone number (e.g. '+13024077400') and is the contact person's phone, NOT a guest name — never include it among the names.\n- The confirmation number from the 'Confirmation No' column (e.g. '32685SG107373').\n\nReturn exactly one object. If a value is genuinely absent from the row, output null for it — never invent one and never substitute a value from a different column.",
+        "complete_criterion": "The Orders > Booking Manage results table shows exactly one order row whose 'Booking ID' or 'Platform Booking ID' value is '{{booking_id}}', the pager under the table reads 'Total 1 items', and the row's blue 'download confirmation slip' link in the 'Action' column is visible on screen.",
+        "terminate_criterion": "A login or sign-in form is displayed instead of the Bingtrip merchant portal — this means the browser session was not authenticated (or its authenticated state did not survive), not that the workflow itself did anything wrong — or, after every filter field was cleared and 'Search' was clicked with only '{{booking_id}}' in the 'Booking ID' field, the results table is empty or contains no row matching '{{booking_id}}'.",
+        "data_schema": {
+          "type": "object",
+          "title": "OrderRowDetails",
+          "description": "The values read from the single matching order row on the Orders > Booking Manage page.",
+          "properties": {
+            "ibn": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "title": "Internal Booking Number (IBN)",
+              "description": "The numeric Booking ID on the FIRST line of the 'Booking ID / Platform Booking ID' cell, copied verbatim (e.g. '8260902055928430'). Never return the long hexadecimal Platform Booking ID printed on the second line of that same cell — that is the platform's own id, not the booking number. Output null if the cell is empty."
+            },
+            "hcn": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "title": "Hotel Confirmation Number (HCN)",
+              "description": "The value in the 'Confirmation No' column of the row, copied verbatim (e.g. '32685SG107373'). This column sits to the right of 'Guest / Contact Person' and may require scrolling the table sideways to see. Output null if it is empty."
+            },
+            "hotelName": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "title": "Hotel Name",
+              "description": "The hotel name on the FIRST line of the 'Hotel Name / Room Type' cell, copied verbatim (e.g. 'Under Canvas Grand Canyon'). Do not include the room type printed underneath it."
+            },
+            "roomCategory": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "title": "Room Type",
+              "description": "The room type on the SECOND line of the 'Hotel Name / Room Type' cell, copied verbatim (e.g. 'Suite with Kids Tent - Private Bath'). Keep the full text including any ' - ' separated qualifier. Do not include the hotel name printed above it, and do not add a room count."
+            },
+            "checkinDate": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "title": "Check-in Date",
+              "description": "The check-in date, i.e. the part BEFORE the '~' on the first line of the 'Check-In/Out / Room Night' cell (e.g. from '2026-09-19 ~2026-09-21' take '2026-09-19'). It is already printed as ISO-8601 YYYY-MM-DD — copy it as-is, no reformatting. Never use the 'Booking Date' column, which is when the order was placed, not a stay date."
+            },
+            "checkoutDate": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "title": "Check-out Date",
+              "description": "The check-out date, i.e. the part AFTER the '~' on the first line of the 'Check-In/Out / Room Night' cell (e.g. from '2026-09-19 ~2026-09-21' take '2026-09-21'), already in ISO-8601 YYYY-MM-DD form. Never use the 'Booking Date' column."
+            },
+            "guestNames": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              },
+              "title": "Guest Names",
+              "description": "Every name listed on the FIRST line of the 'Guest / Contact Person' cell, split on commas, in the order printed, each copied VERBATIM in its original 'Surname/Firstname' form (e.g. 'DeMeij/Daniel'). KEEP DUPLICATES: this portal repeats the lead guest's name once per booked guest, so 'DeMeij/Daniel,DeMeij/Daniel,DeMeij/Daniel,DeMeij/Daniel' must be returned as four separate array items, not deduplicated to one — the number of entries is the only available indication of how many guests the booking covers. Do not reformat, reorder or translate the names, and never include the telephone number printed on the second line of the cell. Output null only if the cell has no names at all."
+            },
+            "guestCount": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "title": "Guest Count",
+              "description": "How many comma-separated names appear on the first line of the 'Guest / Contact Person' cell, counting repeated names separately (e.g. 'DeMeij/Daniel,DeMeij/Daniel,DeMeij/Daniel,DeMeij/Daniel' -> 4). This is a cross-check on guestNames, so it must equal the number of items in that array. Output null if there are no names."
+            }
+          },
+          "required": [
+            "hotelName",
+            "checkinDate",
+            "checkoutDate"
+          ]
+        },
+        "error_code_mapping": {
+          "not_authenticated": "A login or sign-in form is displayed — the browser session is not authenticated",
+          "booking_not_found": "The results table after clearing all filters and searching by Booking ID contains no row matching '{{booking_id}}'"
+        },
+        "max_retries": 1,
+        "max_steps_per_run": 20,
+        "complete_on_download": false,
+        "download_suffix": null,
+        "parameter_keys": [
+          "booking_id"
+        ],
+        "totp_identifier": null,
+        "totp_verification_url": null,
+        "disable_cache": false,
+        "include_action_history_in_verification": false,
+        "engine": "skyvern-2.0"
+      },
+      {
+        "label": "Download_Voucher",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "next_block_label": "Extract_Data",
+        "ignore_workflow_system_prompt": true,
+        "block_type": "file_download",
+        "url": "",
+        "title": "Download_Voucher",
+        "navigation_goal": "*** OBJECTIVE: on the already-filtered Orders > Booking Manage results table, download the confirmation-slip (Voucher) PDF for order '{{booking_id}}' ***\n\n1. The results table already shows exactly one order row, the one matching '{{booking_id}}'. The table is wider than the visible area: if the 'Action' column is not on screen, drag the table's own horizontal scrollbar (just below the row) to the right until the 'Action' column and its blue 'download confirmation slip' link are visible.\n2. Click the blue 'download confirmation slip' link in the 'Action' column of that row, exactly once.\n   - IMPORTANT — do NOT click the 'Export' button above the table: that exports the order LIST as a spreadsheet, not the voucher this workflow needs. Do NOT click the refresh icon next to it either.\n\n### WHAT SUCCESS LOOKS LIKE\nThis browser is configured to save PDFs to disk instead of displaying them, so clicking 'download confirmation slip' starts a download rather than opening a readable page. An unchanged background page, a brief toast, or a download indicator IS the successful outcome — the block finishes on its own as soon as the file is saved.\n- Do NOT wait for the PDF to render on screen, and do NOT treat an unchanged page as a failure.\n- Do NOT click 'download confirmation slip' a second time; a repeat click only produces a duplicate file.\n- If the click opens a new browser tab that shows a PDF viewer or a blank page, that is still the download — do not click anything further in that tab.\n- If a cookie-consent banner or modal covers the page at any point, dismiss it and continue.\n\n### TERMINATE\n- TERMINATE if the filtered results table with the row for '{{booking_id}}' is not present (e.g. a login form, an empty table, or an unrelated page) — this block assumes the previous block already filtered the list, and does not attempt to search for the booking itself.\n- TERMINATE if clicking 'download confirmation slip' produces an error message and no download ever starts.",
+        "error_code_mapping": {
+          "wrong_page": "The filtered Booking Manage results table with the row for '{{booking_id}}' is not on screen, so the preceding navigation block did not actually reach it",
+          "download_not_available": "The row was on screen but clicking 'download confirmation slip' produced an error and no file was downloaded"
+        },
+        "max_retries": 1,
+        "max_steps_per_run": 8,
+        "download_suffix": "voucher.pdf",
+        "parameter_keys": [
+          "booking_id"
+        ],
+        "totp_identifier": null,
+        "totp_verification_url": null,
+        "disable_cache": false,
+        "engine": "skyvern-2.0",
+        "download_timeout": null
+      },
+      {
+        "label": "Extract_Data",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "next_block_label": "Standardize_Output",
+        "ignore_workflow_system_prompt": false,
+        "block_type": "file_url_parser",
+        "file_url": "Download_Voucher_output",
+        "file_type": "pdf",
+        "json_schema": {
+          "type": "object",
+          "title": "VoucherExtraction",
+          "required": [
+            "extracted_information"
+          ],
+          "properties": {
+            "extracted_information": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "description": "The booking details read from the Bingtrip 'Voucher' PDF, as an array containing exactly one object. Always return exactly one item here, never zero and never more than one.",
+              "items": {
+                "type": "object",
+                "title": "VoucherDetails",
+                "description": "One booking's details read from the Bingtrip confirmation-slip ('Voucher') PDF.",
+                "required": [
+                  "address"
+                ],
+                "properties": {
+                  "address": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "title": "Address",
+                    "description": "Full street address of the hotel. Source: the text printed to the right of the 'Address' label near the top of the voucher (e.g. 'WilliamsValle979 Airpark Lane', 'IstanbulSirkeci Eminonu FatihHudavendigar Caddesi No: 26'). This template concatenates city / district / street WITHOUT separating spaces — copy the string EXACTLY as printed, character for character; do not insert spaces or commas, do not reorder the parts, and do not try to tidy it into a conventional address. Output null if there is no 'Address' line."
+                  },
+                  "phone": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "title": "Phone",
+                    "description": "The HOTEL's telephone number. Source: the text printed to the right of the 'Phone' label, directly under 'Address' (e.g. '1-928-2488808', '90-212-5121301'). Copy verbatim, keeping the hyphens exactly as printed. This is the only phone number in the document; never output the guest's or contact person's phone. Output null if there is no 'Phone' line."
+                  },
+                  "bedType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "title": "Bed Type",
+                    "description": "Bed configuration. Source: the line printed under the 'Room info' label, copied verbatim (e.g. '1 King Bed and 1 Double Sofa Bed and 2 Twin Beds', '1 Double Bed and 1 Twin Bed'). Keep the whole string including every ' and ' separated part. Never take it from the room-type heading or from 'Meals'. Output null if there is no 'Room info' line or it is blank."
+                  },
+                  "mealPlan": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "title": "Meal Plan",
+                    "description": "Meal / board plan. Source: the line printed under the 'Meals' label, copied verbatim (e.g. 'No Breakfast', 'Includes 3 breakfasts'). Copy it as printed even when it means no meals are included — 'No Breakfast' is a real value, not a missing one. Output null only if there is no 'Meals' line at all."
+                  },
+                  "voucherHotelName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "title": "Hotel Name As Printed On The Voucher",
+                    "description": "The hotel name as this PDF prints it: the large bold line directly beneath the 'Voucher' title and above the 'Address' label (e.g. 'Under Canvas Grand Canyon', 'Lalahan'). Copy verbatim. Note this line is a single non-wrapping line and may be cut off for long hotel names — return whatever is actually printed, do not complete or guess the rest. Output null if it is absent."
+                  },
+                  "voucherRoomType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "title": "Room Type As Printed On The Voucher",
+                    "description": "The room type as this PDF prints it: the bold grey line in the lower half of the page, on the same row as 'Price Details' but in the right-hand column, directly above the 'Guest Names' label (e.g. 'Suite with Kids Tent - Private Bath', 'Superior Triple Room'). Copy verbatim; it is a single non-wrapping line that may be cut off for long room names. Output null if it is absent."
+                  },
+                  "voucherConfirmationNo": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "title": "Confirmation No As Printed On The Voucher",
+                    "description": "The value printed in blue under the 'Confirmation No' heading in the middle band of the page (e.g. '32685SG107373', '9143799'). Copy verbatim. Never take the value printed next to 'Booking No' at the very top of the page — that is the platform's own booking id (a long hexadecimal string), not a confirmation number. Output null if the 'Confirmation No' block is empty."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "label": "Standardize_Output",
+        "continue_on_failure": false,
+        "next_loop_on_failure": false,
+        "next_block_label": null,
+        "ignore_workflow_system_prompt": false,
+        "block_type": "code",
+        "code": "# Stage 1 (portal order row) is authoritative for the fields whose text the\n# voucher PDF prints on a single non-wrapping line and therefore truncates:\n# hotel name, room type, dates, guest names, IBN, HCN.\n# Stage 2 (voucher PDF) supplies the fields the order table never shows:\n# address, hotel phone, bed configuration and meal plan.\nrow_raw = {{ Find_Booking.extracted_information }}\npdf_raw = {{ Extract_Data.extracted_information }}\n\n\ndef unwrap(value):\n    if isinstance(value, dict) and \"extracted_information\" in value:\n        value = value[\"extracted_information\"]\n    if isinstance(value, list):\n        return value[0] if len(value) > 0 else {}\n    if isinstance(value, dict):\n        return value\n    return {}\n\n\ndef text(value):\n    if value is None:\n        return None\n    if not isinstance(value, str):\n        value = str(value)\n    value = value.strip()\n    if not value or value.lower() in (\"null\", \"none\", \"n/a\", \"-\"):\n        return None\n    return value\n\n\ndef name_list(value):\n    if isinstance(value, str):\n        value = value.split(\",\")\n    if not isinstance(value, list):\n        return []\n    names = []\n    for item in value:\n        name = text(item)\n        if name:\n            names.append(name)\n    return names\n\n\nrow = unwrap(row_raw)\npdf = unwrap(pdf_raw)\n\n# Guest count is not published anywhere on this portal, so it is derived from\n# how many names the order row lists (repeats included: the portal fills one\n# name slot per booked guest, often repeating the lead guest's name).\nguest_names = name_list(row.get(\"guestNames\"))\nadult_count = len(guest_names)\nif adult_count == 0:\n    reported = row.get(\"guestCount\")\n    adult_count = reported if isinstance(reported, int) and reported > 0 else None\n\nhotel_name = text(row.get(\"hotelName\")) or text(pdf.get(\"voucherHotelName\"))\n\n# The voucher repeats the hotel name; surface it separately only when the two\n# sources actually disagree, otherwise there is no second name to report.\nvoucher_hotel_name = text(pdf.get(\"voucherHotelName\"))\nsupplier_hotel_name = None\nif voucher_hotel_name and hotel_name and voucher_hotel_name.lower() != hotel_name.lower():\n    supplier_hotel_name = voucher_hotel_name\n\nbooking = {\n    \"hotelName\": hotel_name,\n    \"address\": text(pdf.get(\"address\")),\n    \"checkinDate\": text(row.get(\"checkinDate\")),\n    \"checkoutDate\": text(row.get(\"checkoutDate\")),\n    \"adultCount\": adult_count,\n    \"guestNames\": guest_names if guest_names else None,\n    \"childrenCount\": None,\n    \"supplierHotelName\": supplier_hotel_name,\n    \"roomCategory\": text(row.get(\"roomCategory\")) or text(pdf.get(\"voucherRoomType\")),\n    \"mealPlan\": text(pdf.get(\"mealPlan\")),\n    \"bedType\": text(pdf.get(\"bedType\")),\n    \"phone\": text(pdf.get(\"phone\")),\n    \"ibn\": text(row.get(\"ibn\")),\n    \"hcn\": text(row.get(\"hcn\")) or text(pdf.get(\"voucherConfirmationNo\")),\n}\n\nreturn {\"parsed_booking\": [booking]}",
+        "parameter_keys": [],
+        "prompt": null,
+        "steps": null
+      }
+    ],
+    "finally_block_label": null,
+    "workflow_system_prompt": "You are parsing a hotel-reservation confirmation slip — titled 'Voucher' — issued by the Bingtrip merchant portal (bingtrip.com), downloaded from an order row via its 'download confirmation slip' link. The text you receive is the literal text layer of that PDF.\n\n### HOW THIS WORKFLOW USES THE DOCUMENT\nThis is the SECOND of two parsing stages. The first stage already read the hotel name, room type, check-in/check-out dates, guest names, booking number and confirmation number straight from the portal's order table, because this PDF lays every value out as a SINGLE LINE THAT DOES NOT WRAP: when a value is too long for the page it is silently cut off rather than continued on the next line. So this stage must supply only the fields the order table does not show — the address, the hotel phone number, the bed configuration and the meal plan — plus a few already-known values that are re-read here purely as cross-checks. Never try to reconstruct or complete a line that looks truncated: return exactly the characters that are printed.\n\n### DOCUMENT LAYOUT\nA single framed page of plain 'label / value' pairs, top to bottom:\n- 'Booking No' followed by a long hexadecimal string — the PLATFORM's booking id (the value typed into the portal's Booking ID filter), not the numeric booking number and not a confirmation number.\n- The 'Voucher' title, then the hotel name in large bold type, then 'Address' and 'Phone' rows.\n- A three-column band: 'Confirmation No' (printed in blue) | 'Check in' / 'Check out' (printed as an abbreviated month and day only, e.g. 'Sep 19' — WITH NO YEAR, plus the weekday and the 'After 15:00' / 'Before 10:00' desk times) | 'Rooms' and 'Nights' counts.\n- A lower band: 'Price Details' with the order status and total amount on the left; on the right the room type in bold grey, then 'Guest Names', then 'Room info' (the bed configuration), then 'Meals' (the board basis).\n- A 'Cancellation Policy' section at the bottom.\n\n### RULES\n1. Never invent a value. If a field is not literally present in the text, output null.\n2. Copy every text value VERBATIM: original spelling, casing, punctuation and spacing. This template concatenates address parts without separating spaces (e.g. 'WilliamsValle979 Airpark Lane') — reproduce that exactly; do not insert spaces, do not reorder, do not tidy, do not translate.\n3. Never substitute one field for another: 'Booking No' is the platform booking id, never the confirmation number; the room type is never the hotel name; 'Room info' is the bed configuration, never the meal plan.\n4. 'No Breakfast' under 'Meals' is a real, meaningful value — output it, do not treat it as a missing field.\n5. Do not read the check-in/check-out dates from this document as final values: they carry no year, so the workflow takes the dates from the portal page instead."
+  },
+  "is_saved_task": false,
+  "status": "published",
+  "run_with": "agent",
+  "adaptive_caching": false,
+  "code_version": 2,
+  "cache_key": "default",
+  "ai_fallback": true,
+  "enable_self_healing": true,
+  "run_sequentially": false
+}
